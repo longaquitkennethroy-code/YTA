@@ -185,6 +185,13 @@ const shotAt = (f: number): Shot => {
 	return {pos: lerp3([-2.5, 1.2, 2.7], [-1.8, 1.3, 3.4], t), target: [0.55, 1.25, 0.0], fov: 56, roll: lerp(-0.06, -0.02, t)};
 };
 
+/** What the lens is focused on in each shot (world position). */
+export const focusAt = (f: number): V3 => {
+	if (f < SHOT_B) return [OFFICER[0], 1.7, OFFICER[2]];
+	if (f < SHOT_C) return [OFFICER[0], 1.6, OFFICER[2]]; // past the civilian's shoulder
+	return [0.5, 1.5, -0.1];
+};
+
 /** The camera never sits still: a slow handheld drift on top of every shot. */
 export const cameraAt = (f: number): Shot => {
 	const s = shotAt(f);

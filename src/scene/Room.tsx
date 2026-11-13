@@ -24,7 +24,7 @@ const M = {
 	sofa: prop(P.sofa, 1.2, {rim: 0.5, rimWidth: 0.25}),
 	sofaDark: prop(P.sofaDark, 1.2),
 	table: prop(P.woodAlt, 0.5),
-	vase: toon({ramp: P.vase, flat: 0.75, grad: 0.3, band: 0.58, soft: 0.14, deep: 0.8, cel: 0.85, spec: 1, shine: 24, rim: 0.8, rimWidth: 0.32, radius: 0.25, pivot: [0, 0.2, 0]}),
+	vase: toon({ramp: P.vase, flat: 0.75, grad: 0.3, band: 0.58, soft: 0.14, deep: 0.8, cel: 0.85, spec: 1, stripe: {y: [0.06, 0.3]}, rim: 0.8, rimWidth: 0.32, radius: 0.25, pivot: [0, 0.2, 0]}),
 	plant: toon({ramp: P.plant, flat: 0.75, grad: 0.3, band: 0.58, soft: 0.12, deep: 0.8, cel: 0.85, radius: 0.25}),
 	frame: prop(P.frame, 0.5),
 	art: prop(P.art, 0.5),

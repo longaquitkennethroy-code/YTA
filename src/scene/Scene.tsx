@@ -7,7 +7,8 @@ import {P} from '../toon/palette';
 import {Room} from './Room';
 import {Stickman} from './Stickman';
 import {Stickman2D} from './Stickman2D';
-import {cameraAt, civilianPose, officerPose} from './acting';
+import {cameraAt, civilianPose, focusAt, officerPose} from './acting';
+import {DepthOfField} from './DepthOfField';
 import {moodAt} from './moods';
 
 const LIGHT_TARGET = new Vector3(0, 0, -1);
@@ -65,6 +66,7 @@ export const Scene: React.FC<{flat?: boolean}> = ({flat}) => {
 			>
 				<object3D attach="target" position={LIGHT_TARGET} />
 			</directionalLight>
+			<DepthOfField focus={focusAt(frame)} />
 			<Room />
 			<Actor variant="officer" pose={officerPose(frame)} trail={[officerPose(frame - 1), officerPose(frame - 2)]} />
 			<Actor variant="civilian" pose={civilianPose(frame)} trail={[civilianPose(frame - 1), civilianPose(frame - 2)]} />

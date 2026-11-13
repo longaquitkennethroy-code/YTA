@@ -62,9 +62,15 @@ export type ToonOptions = {
 	/** Hard-edged core shadow: strength and where the terminator sits (-1..1). */
 	cel?: number;
 	celAt?: number;
-	/** Hard-edged specular highlight: strength and tightness. */
+	/** Half-width of the shadow's edge: ~0.01 is a hard cel edge, ~0.25 a soft gradient. */
+	celSoft?: number;
+	/**
+	 * Stripe highlight strength, and its shape: how far in from the edge it
+	 * sits (0 centre .. 1 edge), its width, and for tall forms the object-space
+	 * y range it runs along. Without `y` it is an arc facing the light.
+	 */
 	spec?: number;
-	shine?: number;
+	stripe?: {inset?: number; width?: number; arc?: number; y?: [number, number]};
 	/** Reflected light: a soft lighter band inside the shadow, near its outer edge. */
 	bounce?: number;
 	/** Share one depth-bias uniform between materials (see depthBias). */
@@ -167,7 +173,9 @@ uniform float uEdge;
 uniform float uCel;
 uniform float uCelAt;
 uniform float uSpec;
-uniform float uShine;
+uniform float uCelSoft;
+uniform vec3 uStripe;
+uniform vec2 uStripeY;
 uniform float uBounce;
 uniform float uSunAmt;
 uniform vec3 uFloorTint;
@@ -383,26 +391,31 @@ void main() {
 	float side = dot(normalize(Nr.xy + vec2(1e-5)), normalize(L.xy + vec2(1e-5)));
 	col = mix(col, cDeep, pow(fres, 2.4) * uEdge);
 
-	// cel core shadow: one hard-edged shape on the side away from the light
+	// core shadow: one shape on the side away from the light, hard or soft-edged
 	vec3 Nc = normalize(mix(Nr, V, uFlat * 0.5));
-	float cel = (1.0 - smoothstep(uCelAt - 0.012, uCelAt + 0.012, dot(Nc, L))) * uCel;
+	float cel = (1.0 - smoothstep(uCelAt - uCelSoft, uCelAt + uCelSoft, dot(Nc, L))) * uCel;
 	cel = max(cel, (1.0 - shadow) * uCel);
 	col = mix(col, mix(cShade, cDeep, 0.5), cel);
 
-	// cel specular: a hard-edged glint, with a brighter core inside it
-	// (the up axis is squashed so tall shapes always catch a vertical streak)
-	vec3 sq = vec3(1.0, 0.35, 1.0);
-	// Placement: a highlight belongs on the lit side, between the middle of the
-	// form and its lit edge, never in shadow. Weighting the half-vector toward
-	// the light pushes it off-centre to roughly a third of the way in.
-	float sp = pow(max(dot(normalize(mix(Nr, V, 0.15) * sq), normalize((L * 1.5 + V) * sq)), 0.0), uShine);
-	float lit1 = step(cel, 0.5) * uSpec;
+	// Highlight: one short stripe that runs along the form just inside its lit
+	// edge, with a small dash below it. Hard-edged, never in shadow.
+	vec2 sk = vec2(1.0, 0.35);
+	float lside = dot(normalize(Nr.xy * sk + vec2(1e-5)), normalize(L.xy * sk + vec2(1e-5)));
+	float aaS = fwidth(fres) * 1.2 + 1e-4;
+	float stripe = 1.0 - smoothstep(uStripe.y - aaS, uStripe.y + aaS, abs(fres - uStripe.x));
+	stripe *= smoothstep(uStripe.z - 0.04, uStripe.z + 0.04, lside);
+	if (uStripeY.y > uStripeY.x) {
+		// tall forms: the stripe has a set length, then a gap, then a dash
+		float hs = (vObjPos.y - uStripeY.x) / (uStripeY.y - uStripeY.x);
+		float body = smoothstep(0.24, 0.3, hs) * (1.0 - smoothstep(0.93, 1.0, hs));
+		float dash = smoothstep(0.0, 0.05, hs) * (1.0 - smoothstep(0.11, 0.16, hs));
+		stripe *= max(body, dash);
+	}
+	col = mix(col, mix(uLight, vec3(1.0), 0.4), stripe * (1.0 - cel) * shadow * uSpec);
 	// Reflected light: the shadow is never flat. Light bouncing off the room
 	// lifts a band just inside the shadow's outer edge, kept clear of the line.
 	float bounce = smoothstep(0.55, 0.7, fres) * (1.0 - smoothstep(0.86, 0.93, fres)) * smoothstep(0.2, 0.7, -side);
-	col = mix(col, mix(cShade, cBase, 0.55) * uSkyTint, bounce * step(0.5, cel) * uBounce);
-	col = mix(col, mix(cBase, uLight, 0.8), smoothstep(0.42, 0.45, sp) * lit1);
-	col = mix(col, vec3(1.0), smoothstep(0.86, 0.89, sp) * lit1 * 0.85);
+	col = mix(col, mix(cShade, cBase, 0.55) * uSkyTint, bounce * cel * uBounce);
 	float rimT = 1.0 - uRimWidth;
 	float rim = smoothstep(rimT, rimT + 0.035, fres * smoothstep(0.1, 0.85, side));
 	rim *= smoothstep(-0.3, 0.2, L.z + 0.25) * shadow;
@@ -475,7 +488,9 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uCel: {value: o.cel ?? 0},
 			uCelAt: {value: o.celAt ?? 0},
 			uSpec: {value: o.spec ?? 0},
-			uShine: {value: o.shine ?? 30},
+			uCelSoft: {value: o.celSoft ?? 0.012},
+			uStripe: {value: new Vector3(o.stripe?.inset ?? 0.42, o.stripe?.width ?? 0.085, o.stripe?.arc ?? (o.stripe?.y ? 0.2 : 0.86))},
+			uStripeY: {value: new Vector2(...(o.stripe?.y ?? [0, 0]))},
 			uBounce: {value: o.bounce ?? 0},
 			uGround: {value: o.ground ?? 0},
 			uYRange: {value: new Vector2(...(o.yRange ?? [0, 1]))},

@@ -126,7 +126,8 @@ const mugGeo = new CylinderGeometry(0.055, 0.05, 0.11, 20);
 
 // ---- materials -------------------------------------------------------------
 // flat ~0.8: the lighting normal is 80% "a sheet of paper facing the camera".
-export const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25};
+export // celSoft: shadows on characters fade in as a gradient instead of a hard edge
+const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25, celSoft: 0.2};
 
 // The whole head (and what it wears) is drawn in front of the torso, so the
 // head keeps a complete outline where it overlaps the body.
@@ -140,9 +141,9 @@ const starMat = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2
 const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
 const starMatHead = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2, ...HEAD});
 const inkMatHead = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4, ...HEAD});
-const visorMat = toon({ramp: P.visor, ...CHAR, ...HEAD, spec: 1, shine: 50, rim: 0.7, rimWidth: 0.55, radius: 0.3});
+const visorMat = toon({ramp: P.visor, ...CHAR, ...HEAD, spec: 1, rim: 0.7, rimWidth: 0.55, radius: 0.3});
 const bandMat = toon({ramp: P.uniformDark, ...CHAR, ...HEAD, radius: 0.3});
-const mugMat = toon({ramp: P.mug, ...CHAR, cel: 0.8, spec: 0.8, shine: 20, radius: 0.08});
+const mugMat = toon({ramp: P.mug, ...CHAR, cel: 0.8, spec: 0.8, radius: 0.08});
 const charLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3});
 const propLine = outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1});
 const headLines = {
@@ -155,7 +156,7 @@ const headPropLines = {
 };
 
 const makeHeadMat = (variant: Variant) =>
-	toon({ramp: P.skin, ...CHAR, depthBiasRef: BIAS[variant], bounce: 0.8, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.9, celAt: 0.05, radius: HEAD_R, pattern: 'face'});
+	toon({ramp: P.skin, ...CHAR, depthBiasRef: BIAS[variant], bounce: 0.8, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.8, celAt: 0.05, celSoft: 0.4, radius: HEAD_R, pattern: 'face'});
 const makeBodyMat = (variant: Variant) =>
 	toon({
 		ramp: variant === 'officer' ? P.uniform : P.shirt,
@@ -170,14 +171,14 @@ const makeBodyMat = (variant: Variant) =>
 		cel: 0.9,
 		celAt: 0.15,
 		spec: 1,
-		shine: 60,
+		stripe: {y: [0.3, 0.74]},
 		yRange: [0, BODY_H * 0.7],
 		pivot: [0, BODY_H / 2, 0],
 		radius: BODY_H / 2,
 		pattern: variant === 'officer' ? 'uniform' : 'none',
 	});
-const hatMat = toon({ramp: P.uniform, ...CHAR, ...HEAD, bounce: 0.7, edge: 0.5, cel: 0.9, celAt: 0.15, spec: 1, shine: 22, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
-const hairMat = toon({ramp: P.hair, ...CHAR, ...HEAD_CIV, bounce: 0.6, cel: 0.85, celAt: 0.15, spec: 0.7, shine: 18, rim: 0.6, rimWidth: 0.35, radius: 0.36});
+const hatMat = toon({ramp: P.uniform, ...CHAR, ...HEAD, bounce: 0.7, edge: 0.5, cel: 0.9, celAt: 0.15, spec: 1, stripe: {y: [0.1, 0.27], inset: 0.38}, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
+const hairMat = toon({ramp: P.hair, ...CHAR, ...HEAD_CIV, bounce: 0.6, cel: 0.85, celAt: 0.15, spec: 0.7, rim: 0.6, rimWidth: 0.35, radius: 0.36});
 
 // ---- limbs -----------------------------------------------------------------
 export const v = (a: V3) => new Vector3(a[0], a[1], a[2]);
