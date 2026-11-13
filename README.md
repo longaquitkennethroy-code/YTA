@@ -14,6 +14,7 @@ There are two versions of the same scene:
 - `StickmanShort`: characters are 3D shapes shaded flat.
 - `StickmanShort2D`: characters are flat 2D cut-outs standing in the 3D room (`src/scene/Stickman2D.tsx`). Render it with `npx remotion render src/index.ts StickmanShort2D out/short-2d.mp4`.
 
+- `StagingStudy`: a 58-second camera study (`src/study/direction.ts`). It rebuilds a reference video's staging, camera moves and lens angles shot by shot, using this project's own characters and rooms as stand-ins. Render it with `npx remotion render src/index.ts StagingStudy out/staging-study.mp4`.
 
 On a Linux machine without a GPU, render with `REMOTION_GL=swangle npm run render`.
 

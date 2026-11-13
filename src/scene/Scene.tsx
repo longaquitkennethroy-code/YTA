@@ -9,17 +9,36 @@ import {Stickman} from './Stickman';
 import {Stickman2D} from './Stickman2D';
 import {cameraAt, civilianPose, focusAt, officerPose} from './acting';
 import {DepthOfField} from './DepthOfField';
-import {moodAt} from './moods';
+import {Mood, moodAt} from './moods';
+import type {Pose} from './Stickman';
+import type {Shot} from './acting';
+
+type V3 = [number, number, number];
+
+/** Everything that changes over time: who is where, and how the camera sees it. */
+export type Direction = {
+	camera: (f: number) => Shot;
+	mood: (f: number) => Mood;
+	focus: (f: number) => V3;
+	/** Blur strength; 1 is the default lens. */
+	blur?: (f: number) => number;
+	officer: (f: number) => Pose | null;
+	civilian: (f: number) => Pose | null;
+};
+
+const SHORT: Direction = {camera: cameraAt, mood: moodAt, focus: focusAt, officer: officerPose, civilian: civilianPose};
 
 const LIGHT_TARGET = new Vector3(0, 0, -1);
 
-export const Scene: React.FC<{flat?: boolean}> = ({flat}) => {
+export const Scene: React.FC<{flat?: boolean; direction?: Direction}> = ({flat, direction = SHORT}) => {
 	// flat: characters are 2D cut-outs in the 3D room
 	const Actor = flat ? Stickman2D : Stickman;
 	const frame = useCurrentFrame();
 	const camera = useThree((s) => s.camera) as PerspectiveCamera;
 
-	const shot = cameraAt(frame);
+	const shot = direction.camera(frame);
+	const officer = direction.officer(frame);
+	const civilian = direction.civilian(frame);
 	camera.position.set(...shot.pos);
 	camera.fov = shot.fov;
 	camera.near = 0.1;
@@ -30,7 +49,7 @@ export const Scene: React.FC<{flat?: boolean}> = ({flat}) => {
 	camera.updateMatrixWorld();
 
 	// the mood drives every material through the shared uniforms
-	const mood = moodAt(frame);
+	const mood = direction.mood(frame);
 	const LIGHT_POS = new Vector3(...mood.light);
 	globals.uLightDirW.value.copy(LIGHT_POS).sub(LIGHT_TARGET).normalize();
 	globals.uKeyTint.value.copy(mood.key);
@@ -66,10 +85,10 @@ export const Scene: React.FC<{flat?: boolean}> = ({flat}) => {
 			>
 				<object3D attach="target" position={LIGHT_TARGET} />
 			</directionalLight>
-			<DepthOfField focus={focusAt(frame)} />
+			<DepthOfField focus={direction.focus(frame)} strength={direction.blur?.(frame) ?? 1} />
 			<Room />
-			<Actor variant="officer" pose={officerPose(frame)} trail={[officerPose(frame - 1), officerPose(frame - 2)]} />
-			<Actor variant="civilian" pose={civilianPose(frame)} trail={[civilianPose(frame - 1), civilianPose(frame - 2)]} />
+			{officer ? <Actor variant="officer" pose={officer} trail={[direction.officer(frame - 1) ?? officer, direction.officer(frame - 2) ?? officer]} /> : null}
+			{civilian ? <Actor variant="civilian" pose={civilian} trail={[direction.civilian(frame - 1) ?? civilian, direction.civilian(frame - 2) ?? civilian]} /> : null}
 		</>
 	);
 };

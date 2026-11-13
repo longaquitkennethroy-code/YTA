@@ -82,3 +82,23 @@ export const MOODS = {
 /** Which mood each shot uses. Swap the names here to relight a shot. */
 export const moodAt = (frame: number): Mood =>
 	frame < SHOT_B ? MOODS.morning : frame < SHOT_C ? MOODS.golden : MOODS.night;
+
+/** Cross-fade two moods, for time passing inside one shot. */
+export const mixMood = (a: Mood, b: Mood, t: number): Mood => {
+	const c = (x: Color, y: Color) => x.clone().lerp(y, t);
+	const n = (x: number, y: number) => x + (y - x) * t;
+	return {
+		key: c(a.key, b.key),
+		amb: c(a.amb, b.amb),
+		fog: c(a.fog, b.fog),
+		floor: c(a.floor, b.floor),
+		sky: c(a.sky, b.sky),
+		sun: c(a.sun, b.sun),
+		sunAmt: n(a.sunAmt, b.sunAmt),
+		light: [n(a.light[0], b.light[0]), n(a.light[1], b.light[1]), n(a.light[2], b.light[2])],
+		lamp: n(a.lamp, b.lamp),
+		glass: {base: c(a.glass.base, b.glass.base), shade: c(a.glass.shade, b.glass.shade), deep: c(a.glass.deep, b.glass.deep), light: c(a.glass.light, b.glass.light)},
+		gradeTop: t < 0.5 ? a.gradeTop : b.gradeTop,
+		gradeBottom: t < 0.5 ? a.gradeBottom : b.gradeBottom,
+	};
+};

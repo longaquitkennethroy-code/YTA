@@ -32,7 +32,10 @@ float viewZ(vec2 uv) {
 // Blur size, 0..1. Like a real lens it grows fast in front of the focus
 // distance and levels off behind it; a small band around focus stays sharp.
 float coc(float z) {
-	return clamp((abs(1.0 / uFocus - 1.0 / z) - 0.06) * 3.0 * uStrength, 0.0, 1.0);
+	// the sharp band always reaches half a metre in front of the focus point,
+	// so a close-up keeps the whole head sharp
+	float band = max(0.09, 0.5 / (uFocus * max(uFocus - 0.5, 0.2)));
+	return clamp((abs(1.0 / uFocus - 1.0 / z) - band) * 3.4 * uStrength, 0.0, 1.0);
 }
 
 void main() {
@@ -40,9 +43,9 @@ void main() {
 	float cc = coc(zc);
 	vec3 acc = texture2D(tColor, vUv).rgb;
 	float total = 1.0;
-	for (int i = 0; i < 56; i++) {
+	for (int i = 0; i < 40; i++) {
 		float fi = float(i) + 0.5;
-		float r = sqrt(fi / 56.0);
+		float r = sqrt(fi / 40.0);
 		float th = fi * 2.39996323;
 		vec2 uv = vUv + vec2(cos(th) / uAspect, sin(th)) * r * uMaxBlur;
 		float zs = viewZ(uv);
@@ -96,7 +99,8 @@ export const DepthOfField: React.FC<{focus: V3; strength?: number; maxBlur?: num
 		const quad = new Scene();
 		quad.add(new Mesh(new PlaneGeometry(2, 2), material));
 		return {target, material, quad, cam: new OrthographicCamera(-1, 1, 1, -1, 0, 1)};
-	}, [gl, size, maxBlur, strength]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [gl, size, maxBlur]);
 	useEffect(
 		() => () => {
 			post.target.dispose();
@@ -107,6 +111,7 @@ export const DepthOfField: React.FC<{focus: V3; strength?: number; maxBlur?: num
 
 	const u = post.material.uniforms;
 	u.uFocus.value = Math.max(0.2, -new Vector3(...focus).applyMatrix4(camera.matrixWorldInverse).z);
+	u.uStrength.value = strength;
 	u.uNear.value = camera.near;
 	u.uFar.value = camera.far;
 
