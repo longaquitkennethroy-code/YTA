@@ -33,20 +33,20 @@ export type StudyShot = {
 export const STUDY_FPS = 30;
 export const STUDY_DURATION = 1751;
 
-const CLAMP = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
-const ramp = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], CLAMP);
-const ease = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], {...CLAMP, easing: Easing.inOut(Easing.cubic)});
-const snap = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], {...CLAMP, easing: Easing.bezier(0.2, 1.4, 0.35, 1)});
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const lerp3 = (a: V3, b: V3, t: number): V3 => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-const wave = (f: number, period: number, phase = 0) => Math.sin((f / period) * Math.PI * 2 + phase);
-const pulse = (f: number, t: number, w: number) => Math.max(0, 1 - Math.abs(f - t) / w);
+export const CLAMP = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
+export const ramp = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], CLAMP);
+export const ease = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], {...CLAMP, easing: Easing.inOut(Easing.cubic)});
+export const snap = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], {...CLAMP, easing: Easing.bezier(0.2, 1.4, 0.35, 1)});
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+export const lerp3 = (a: V3, b: V3, t: number): V3 => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+export const wave = (f: number, period: number, phase = 0) => Math.sin((f / period) * Math.PI * 2 + phase);
+export const pulse = (f: number, t: number, w: number) => Math.max(0, 1 - Math.abs(f - t) / w);
 const {morning, golden, night} = MOODS;
 const hold = (m: Mood) => () => m;
 
 // ---- places in our set -----------------------------------------------------
-const SOFA_X = 2.15; // sitting on the sofa, facing into the room
-const FACE_ROOM = -Math.PI / 2;
+export const SOFA_X = 2.15; // sitting on the sofa, facing into the room
+export const FACE_ROOM = -Math.PI / 2;
 const LEG_NEAR: V3 = [1.9, 0.05, 0.72]; // sofa foot nearest the kitchen
 const LEG_FAR: V3 = [1.9, 0.08, 2.95];
 const DOORWAY: V3 = [-1.0, 0, -3.6];
@@ -257,10 +257,10 @@ const camera = (f: number): Shot => {
 };
 
 // ---- acting ----------------------------------------------------------------
-const FACE: Face = {blink: 0, lid: 0.25, look: [0, 0], browL: [0.03, -0.1], browR: [0.03, -0.1], mouth: [0.09, 0, 0, 0]};
+export const FACE: Face = {blink: 0, lid: 0.25, look: [0, 0], browL: [0.03, -0.1], browR: [0.03, -0.1], mouth: [0.09, 0, 0, 0]};
 
 /** Standing idle: breathing, a slow weight shift, the odd blink. */
-const stand = (pos: V3, yaw: number, f: number, o: Partial<Pose> = {}, face: Partial<Face> = {}): Pose => {
+export const stand = (pos: V3, yaw: number, f: number, o: Partial<Pose> = {}, face: Partial<Face> = {}): Pose => {
 	const br = wave(f, 75);
 	const shift = wave(f, 170, 0.6);
 	return {
@@ -287,7 +287,7 @@ const stand = (pos: V3, yaw: number, f: number, o: Partial<Pose> = {}, face: Par
 };
 
 /** Walking from a to b; p is progress 0..1. */
-const walk = (a: V3, b: V3, p: number, f: number, o: Partial<Pose> = {}): Pose => {
+export const walk = (a: V3, b: V3, p: number, f: number, o: Partial<Pose> = {}): Pose => {
 	const dist = Math.hypot(b[0] - a[0], b[2] - a[2]);
 	const th = (p * dist) / 0.55 * Math.PI;
 	const moving = Math.min(1, p * 8, (1 - p) * 8);
@@ -306,7 +306,7 @@ const walk = (a: V3, b: V3, p: number, f: number, o: Partial<Pose> = {}): Pose =
 };
 
 /** Sitting on the sofa at depth z. */
-const sit = (z: number, f: number, o: Partial<Pose> = {}, face: Partial<Face> = {}): Pose =>
+export const sit = (z: number, f: number, o: Partial<Pose> = {}, face: Partial<Face> = {}): Pose =>
 	stand([SOFA_X, 0, z], FACE_ROOM, f, {
 		seated: true,
 		bob: -0.12 + wave(f, 75) * 0.006,
@@ -320,11 +320,11 @@ const sit = (z: number, f: number, o: Partial<Pose> = {}, face: Partial<Face> = 
 		...o,
 	}, face);
 
-const HIPS: Partial<Pose> = {handL: [0.2, 0.9, 0.03], handR: [-0.2, 0.9, 0.03], elbowL: [1, 0.1, -0.5], elbowR: [-1, 0.1, -0.5]};
-const BORED: Partial<Face> = {lid: 0.38, browL: [0.06, -0.12], browR: [-0.02, 0.2], mouth: [0.105, 0, -0.05, 0]};
-const WORRIED: Partial<Face> = {lid: 0, browL: [0.06, -0.3], browR: [0.06, -0.3], mouth: [0.07, 0, -0.06, 0]};
+export const HIPS: Partial<Pose> = {handL: [0.2, 0.9, 0.03], handR: [-0.2, 0.9, 0.03], elbowL: [1, 0.1, -0.5], elbowR: [-1, 0.1, -0.5]};
+export const BORED: Partial<Face> = {lid: 0.38, browL: [0.06, -0.12], browR: [-0.02, 0.2], mouth: [0.105, 0, -0.05, 0]};
+export const WORRIED: Partial<Face> = {lid: 0, browL: [0.06, -0.3], browR: [0.06, -0.3], mouth: [0.07, 0, -0.06, 0]};
 /** Mouth shapes swapped every three frames while a character is speaking. */
-const chat = (f: number) => [1, 0.2, 0.6, 0.9, 0.05, 0.75, 0.35][Math.floor(f / 3) % 7] * 0.05;
+export const chat = (f: number) => [1, 0.2, 0.6, 0.9, 0.05, 0.75, 0.35][Math.floor(f / 3) % 7] * 0.05;
 
 const officer = (f: number): Pose | null => {
 	if (f < 58) return walk([-1.8, 0, 3.3], [0.5, 0, 3.5], ramp(f, 0, 58), f, {}, );

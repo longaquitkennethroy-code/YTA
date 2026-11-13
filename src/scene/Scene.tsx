@@ -4,7 +4,7 @@ import {PerspectiveCamera, Vector3} from 'three';
 import {useCurrentFrame} from 'remotion';
 import {globals} from '../toon/materials';
 import {P} from '../toon/palette';
-import {Room} from './Room';
+import {Room, SofaStyle} from './Room';
 import {Stickman} from './Stickman';
 import {Stickman2D} from './Stickman2D';
 import {cameraAt, civilianPose, focusAt, officerPose} from './acting';
@@ -27,6 +27,12 @@ export type Direction = {
 	civilian: (f: number) => Pose | null;
 	/** Lift the ceiling off, for shots from above the room. */
 	openTop?: (f: number) => boolean;
+	/** Which cast member plays each of the two slots (see cast.ts). */
+	cast?: {officer: string; civilian: string};
+	/** The sofa's condition over time. */
+	sofa?: (f: number) => SofaStyle;
+	/** Extra set dressing for this film, drawn inside the 3D scene. */
+	set?: (f: number) => React.ReactNode;
 };
 
 const UP = new Vector3(0, 1, 0);
@@ -122,9 +128,10 @@ export const Scene: React.FC<{flat?: boolean; direction?: Direction}> = ({flat, 
 				<object3D attach="target" position={LIGHT_TARGET} />
 			</directionalLight>
 			<DepthOfField focus={direction.focus(frame)} strength={direction.blur?.(frame) ?? 1} />
-			<Room ceiling={!openTop} />
-			{officer ? <Actor variant="officer" pose={officer} trail={[at(frame - 1).o ?? officer, at(frame - 2).o ?? officer]} /> : null}
-			{civilian ? <Actor variant="civilian" pose={civilian} trail={[at(frame - 1).c ?? civilian, at(frame - 2).c ?? civilian]} /> : null}
+			<Room ceiling={!openTop} sofa={direction.sofa?.(frame)} />
+			{direction.set?.(frame)}
+			{officer ? <Actor variant={direction.cast?.officer ?? "officer"} pose={officer} trail={[at(frame - 1).o ?? officer, at(frame - 2).o ?? officer]} /> : null}
+			{civilian ? <Actor variant={direction.cast?.civilian ?? "civilian"} pose={civilian} trail={[at(frame - 1).c ?? civilian, at(frame - 2).c ?? civilian]} /> : null}
 		</>
 	);
 };

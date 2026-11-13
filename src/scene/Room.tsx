@@ -40,6 +40,13 @@ const M = {
 	shade: toon({ramp: ramp(0.8, 0.045, 265), flat: 0.7, grad: 0.3, band: 0.55, soft: 0.1, deep: 0.6, cel: 0.8, radius: 0.3}),
 	pot: prop(ramp(0.68, 0.12, 45), 0.3, {cel: 0.8}),
 	ink: toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.5}),
+	// a worn-out sofa: faded, low chroma
+	oldSofa: prop(ramp(0.66, 0.045, 70), 1.2, {rim: 0.3, rimWidth: 0.25}),
+	oldSofaDark: prop(ramp(0.55, 0.04, 65), 1.2),
+	// an expensive one: rich, glossy
+	newSofa: prop(ramp(0.56, 0.17, 18), 1.2, {rim: 0.7, rimWidth: 0.25, spec: 0.8, stripe: {inset: 0.5}}),
+	newSofaDark: prop(ramp(0.45, 0.15, 15), 1.2),
+	cushion: prop(ramp(0.85, 0.13, 85), 0.4, {cel: 0.8}),
 };
 // book spines and picture mats: accents drawn from the same hue families
 const ACCENTS = [P.sofa, P.gold, P.shirt, P.frame, P.rugBorder, P.plant, P.art, P.hair].map((r) => prop(r, 0.4));
@@ -105,7 +112,35 @@ const Window: React.FC<{position: V3; size: [number, number]; rotation?: V3}> = 
 	</group>
 );
 
-export const Room: React.FC<{ceiling?: boolean}> = ({ceiling = true}) => (
+export type SofaStyle = 'classic' | 'old' | 'new' | 'none';
+
+/** The sofa against the right wall, in three conditions. */
+const Sofa: React.FC<{style: SofaStyle}> = ({style}) => {
+	if (style === 'none') return null;
+	const top = style === 'old' ? M.oldSofa : style === 'new' ? M.newSofa : M.sofa;
+	const dark = style === 'old' ? M.oldSofaDark : style === 'new' ? M.newSofaDark : M.sofaDark;
+	const big = style === 'new';
+	return (
+		<group position={[2.3, 0, 1.9]}>
+			<Box size={[1.0, 0.3, 2.3]} position={[0, 0.27, 0]} material={dark} receive />
+			{/* the old one sags in the middle */}
+			<Box size={[0.85, style === 'old' ? 0.15 : 0.2, 2.0]} position={[-0.05, style === 'old' ? 0.47 : 0.5, 0]} material={top} receive />
+			<Box size={[0.32, big ? 0.95 : 0.75, 2.3]} position={[0.42, big ? 0.84 : 0.74, 0]} material={top} receive />
+			<Box size={[1.05, big ? 0.62 : 0.5, 0.3]} position={[0, big ? 0.56 : 0.5, -1.25]} material={top} receive />
+			<Box size={[1.05, big ? 0.62 : 0.5, 0.3]} position={[0, big ? 0.56 : 0.5, 1.25]} material={top} receive />
+			{big ? (
+				<>
+					<Box size={[0.12, 0.4, 0.4]} position={[0.22, 0.82, -0.7]} rotation={[0.25, 0, 0]} material={M.cushion} />
+					<Box size={[0.12, 0.4, 0.4]} position={[0.22, 0.82, 0.75]} rotation={[-0.2, 0, 0]} material={M.cushion} />
+				</>
+			) : null}
+			<Box size={[0.08, 0.12, 0.08]} position={[-0.4, 0.06, -1.2]} material={M.ink} line={false} />
+			<Box size={[0.08, 0.12, 0.08]} position={[-0.4, 0.06, 1.2]} material={M.ink} line={false} />
+		</group>
+	);
+};
+
+export const Room: React.FC<{ceiling?: boolean; sofa?: SofaStyle}> = ({ceiling = true, sofa = 'classic'}) => (
 	<group>
 		{/* ---------------- living room: x -3..3, z -3..4.5 ---------------- */}
 		<Box size={[6.4, 0.1, 7.8]} position={[0, -0.05, 0.75]} material={M.wood} cast={false} receive line={false} />
@@ -135,15 +170,7 @@ export const Room: React.FC<{ceiling?: boolean}> = ({ceiling = true}) => (
 		<Box size={[1.05, 0.14, 0.02]} position={[0.55, 1.97, 4.43]} material={M.sofaDark} cast={false} line={boxLineThin} />
 
 		{/* sofa against the right wall */}
-		<group position={[2.3, 0, 1.9]}>
-			<Box size={[1.0, 0.3, 2.3]} position={[0, 0.27, 0]} material={M.sofaDark} receive />
-			<Box size={[0.85, 0.2, 2.0]} position={[-0.05, 0.5, 0]} material={M.sofa} receive />
-			<Box size={[0.32, 0.75, 2.3]} position={[0.42, 0.74, 0]} material={M.sofa} receive />
-			<Box size={[1.05, 0.5, 0.3]} position={[0, 0.5, -1.25]} material={M.sofa} receive />
-			<Box size={[1.05, 0.5, 0.3]} position={[0, 0.5, 1.25]} material={M.sofa} receive />
-			<Box size={[0.08, 0.12, 0.08]} position={[-0.4, 0.06, -1.2]} material={M.ink} line={false} />
-			<Box size={[0.08, 0.12, 0.08]} position={[-0.4, 0.06, 1.2]} material={M.ink} line={false} />
-		</group>
+		<Sofa style={sofa} />
 
 		{/* side table, vase and plant */}
 		<group position={[2.35, 0, -2.3]}>

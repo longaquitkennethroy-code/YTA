@@ -22,7 +22,8 @@ import {Box, Ink, boxLineThin} from '../toon/Ink';
 import {outline, toon} from '../toon/materials';
 import {P} from '../toon/palette';
 import {keepAway, pushOut} from './colliders';
-import {Headwear, Mug, makeWear} from './Accessories2D';
+import {Headwear, HeldProp, Shades, makeWear} from './Accessories2D';
+import {Held, specOf} from './cast';
 import {CHAR, HEAD_R} from './charStyle';
 import {globals} from '../toon/materials';
 
@@ -69,6 +70,10 @@ export type Pose = {
 	face: Face;
 	/** Sitting on furniture: the hips may rest on it instead of being pushed clear. */
 	seated?: boolean;
+	/** What is in the right hand; null for nothing, undefined for the cast default. */
+	held?: Held | null;
+	/** Sunglasses on. */
+	shades?: boolean;
 };
 
 // ---- proportions -----------------------------------------------------------
@@ -117,29 +122,27 @@ export const starGeo = (() => {
 // The whole head (and what it wears) is drawn in front of the torso, so the
 // head keeps a complete outline where it overlaps the body.
 // The amount is worked out every frame from where the torso actually is.
-const BIAS = {officer: {value: 0.24}, civilian: {value: 0.24}};
-const HEAD = {depthBiasRef: BIAS.officer};
-const HEAD_CIV = {depthBiasRef: BIAS.civilian};
+const BIAS: Record<string, {value: number}> = {officer: {value: 0.24}, civilian: {value: 0.24}};
+const biasOf = (k: string) => (BIAS[k] ??= {value: 0.24});
 // Flat accessories sit in front of the round head: pulled a head's radius further.
-const WEAR_BIAS = {officer: {value: 0.6}, civilian: {value: 0.6}};
+const WEAR_BIAS: Record<string, {value: number}> = {};
 const HELD_BIAS = {value: 0.1};
-const wears = {officer: makeWear(WEAR_BIAS.officer), civilian: makeWear(WEAR_BIAS.civilian)};
+const wears: Record<string, ReturnType<typeof makeWear>> = {};
+const wearOf = (k: string) => (wears[k] ??= makeWear((WEAR_BIAS[k] ??= {value: 0.6}), specOf(k)));
 const held = makeWear(HELD_BIAS);
 
 export const limbMat = toon({figure: true, ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
 const starMat = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2});
 const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
 const charLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3});
-const headLines = {
-	officer: outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3, ...HEAD}),
-	civilian: outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3, ...HEAD_CIV}),
-};
+const headLines: Record<string, ReturnType<typeof outline>> = {};
+const headLineOf = (k: string) => (headLines[k] ??= outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3, depthBiasRef: biasOf(k)}));
 
 const makeHeadMat = (variant: Variant) =>
-	toon({ramp: P.skin, ...CHAR, depthBiasRef: BIAS[variant], bounce: 0.8, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.8, celAt: 0.05, celSoft: 0.4, radius: HEAD_R, pattern: 'face'});
+	toon({ramp: P.skin, ...CHAR, depthBiasRef: biasOf(variant), bounce: 0.8, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.8, celAt: 0.05, celSoft: 0.4, radius: HEAD_R, pattern: 'face'});
 const makeBodyMat = (variant: Variant) =>
 	toon({
-		ramp: variant === 'officer' ? P.uniform : P.shirt,
+		ramp: specOf(variant).body,
 		...CHAR,
 		grad: 0.42,
 		band: 0.56,
@@ -155,7 +158,7 @@ const makeBodyMat = (variant: Variant) =>
 		yRange: [0, BODY_H * 0.7],
 		pivot: [0, BODY_H / 2, 0],
 		radius: BODY_H / 2,
-		pattern: variant === 'officer' ? 'uniform' : 'none',
+		pattern: specOf(variant).uniform ? 'uniform' : 'none',
 	});
 
 // ---- limbs -----------------------------------------------------------------
@@ -207,7 +210,8 @@ export const armsOf = (pose: Pose) => {
 };
 
 // ---- character -------------------------------------------------------------
-export type Variant = 'officer' | 'civilian';
+/** A key into the cast (see cast.ts). */
+export type Variant = string;
 
 const Star: React.FC<{position: V3; rotation?: V3; size: number}> = ({position, rotation, size}) => (
 	<group position={position} rotation={rotation}>
@@ -219,7 +223,8 @@ const Star: React.FC<{position: V3; rotation?: V3; size: number}> = ({position, 
 export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> = ({variant, pose, trail = []}) => {
 	const camera = useThree((s) => s.camera);
 	const headMat = useMemo(() => makeHeadMat(variant), [variant]);
-	const headLine = headLines[variant];
+	const headLine = headLineOf(variant);
+	const spec = specOf(variant);
 	const bodyMat = useMemo(() => makeBodyMat(variant), [variant]);
 
 	const {hip, bodyQ, onBody, headPos, armL, armR, legL, legR, sx, sy, hx, hy} = rigOf(pose);
@@ -229,7 +234,7 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 	// the face is ink in the head shader, so expressions are just uniforms
 	const u = (headMat as ShaderMaterial).uniforms;
 	const f = pose.face;
-	u.uEyes.value.set(f.blink, f.blink, f.lid, variant === 'civilian' ? 1 : 0);
+	u.uEyes.value.set(f.blink, f.blink, f.lid, spec.glasses && !pose.shades ? 1 : 0);
 	u.uLook.value.set(f.look[0], f.look[1]);
 	u.uBrow.value.set(f.browL[0], f.browL[1], f.browR[0], f.browR[1]);
 	u.uMouth.value.set(...f.mouth);
@@ -256,7 +261,7 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 		-p.clone().applyAxisAngle(new Vector3(0, 1, 0), pose.yaw).add(v(pose.pos)).applyMatrix4(camera.matrixWorldInverse).z;
 	let nearest = Infinity;
 	for (const y of [0.3, 0.45, 0.6, 0.72, BODY_H]) nearest = Math.min(nearest, depth(onBody(0, y, 0)) - 0.24);
-	BIAS[variant].value = Math.max(0.1, depth(headPos) - nearest + 0.06);
+	biasOf(variant).value = Math.max(0.1, depth(headPos) - nearest + 0.06);
 
 	// Follow-through: the hat and hair are loose on the head, so they lag
 	// behind when it turns or drops and settle a beat later.
@@ -276,7 +281,9 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 	const l3 = globals.uLightDirW.value.clone().applyQuaternion(planeQ.clone().invert());
 	const ll = Math.hypot(l3.x, l3.y) || 1;
 	const light: [number, number] = [l3.x / ll, l3.y / ll];
-	WEAR_BIAS[variant].value = BIAS[variant].value + HEAD_R + 0.08;
+	wearOf(variant);
+	WEAR_BIAS[variant].value = biasOf(variant).value + HEAD_R + 0.08;
+	const holding: Held | null = pose.held === undefined ? (spec.held ?? null) : pose.held;
 
 	return (
 		<group position={pose.pos} rotation={[0, pose.yaw, 0]}>
@@ -294,7 +301,7 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 
 			<group position={hip} rotation={bodyEuler} scale={[sx, sy, sx]}>
 				<Ink geometry={bodyGeo} material={bodyMat} line={charLine} receive />
-				{variant === 'officer' ? (
+				{spec.uniform ? (
 					<>
 						<mesh geometry={beltGeo} material={inkMat} position={[0, 0.2, 0]} />
 						<Box size={[0.07, 0.06, 0.03]} position={[0, 0.2, 0.205]} material={starMat} line={boxLineThin} />
@@ -310,12 +317,13 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 			{/* worn and held things are flat drawings on a plane that faces the camera */}
 			<group position={headPos} quaternion={planeLocal}>
 				<group rotation={[0, 0, pose.headRoll * facing]} scale={[hx, hy, 1]}>
-					<Headwear variant={variant} wear={wears[variant]} facing={facing} sideways={sideways} drag={dragZ} light={light} />
+					<Headwear spec={spec} wear={wearOf(variant)} facing={facing} sideways={sideways} drag={dragZ} light={light} />
+					{pose.shades && facing > -0.3 ? <Shades wear={wearOf(variant)} facing={facing} sideways={sideways} light={light} /> : null}
 				</group>
 			</group>
-			{variant === 'civilian' ? (
+			{holding ? (
 				<group position={armR[2]} quaternion={planeLocal}>
-					<Mug wear={held} light={light} />
+					<HeldProp kind={holding} wear={held} light={light} />
 				</group>
 			) : null}
 		</group>

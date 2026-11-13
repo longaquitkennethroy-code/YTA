@@ -3,6 +3,8 @@ import {Composition} from 'remotion';
 import {Short} from './Short';
 import {DURATION, FPS} from './scene/timeline';
 import {Study} from './study/Study';
+import {RaiseShort} from './shorts/raise/RaiseShort';
+import {DURATION as RAISE_DURATION, FPS as RAISE_FPS} from './shorts/raise/direction';
 import {STUDY_DURATION, STUDY_FPS} from './study/direction';
 
 export const Root: React.FC = () => (
@@ -36,5 +38,7 @@ export const Root: React.FC = () => (
 		durationInFrames={STUDY_DURATION}
 		defaultProps={{flat: false}}
 	/>
+	{/* short 01: "Why your raise made you poorer" */}
+	<Composition id="Short01Raise" component={RaiseShort} width={1080} height={1920} fps={RAISE_FPS} durationInFrames={RAISE_DURATION} />
 	</>
 );
