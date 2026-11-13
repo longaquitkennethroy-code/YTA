@@ -50,6 +50,12 @@ export type ToonOptions = {
 	rimWidth?: number;
 	/** Darken toward the silhouette, like the glossy bodies in the reference. */
 	edge?: number;
+	/** Hard-edged core shadow: strength and where the terminator sits (-1..1). */
+	cel?: number;
+	celAt?: number;
+	/** Hard-edged specular highlight: strength and tightness. */
+	spec?: number;
+	shine?: number;
 	/** Extra darkening toward the bottom of the object (object-space y range). */
 	ground?: number;
 	yRange?: [number, number];
@@ -122,6 +128,10 @@ uniform float uDeepAmt;
 uniform float uRim;
 uniform float uRimWidth;
 uniform float uEdge;
+uniform float uCel;
+uniform float uCelAt;
+uniform float uSpec;
+uniform float uShine;
 uniform float uGround;
 uniform vec2 uYRange;
 uniform float uPatScale;
@@ -303,6 +313,20 @@ void main() {
 	// crisp rim highlight hugging the lit edge
 	float fres = 1.0 - max(dot(Nr, V), 0.0);
 	col = mix(col, cDeep, pow(fres, 2.4) * uEdge);
+
+	// cel core shadow: one hard-edged shape on the side away from the light
+	vec3 Nc = normalize(mix(Nr, V, uFlat * 0.5));
+	float cel = (1.0 - smoothstep(uCelAt - 0.012, uCelAt + 0.012, dot(Nc, L))) * uCel;
+	cel = max(cel, (1.0 - shadow) * uCel);
+	col = mix(col, mix(cShade, cDeep, 0.5), cel);
+
+	// cel specular: a hard-edged glint, with a brighter core inside it
+	// (the up axis is squashed so tall shapes always catch a vertical streak)
+	vec3 sq = vec3(1.0, 0.35, 1.0);
+	float sp = pow(max(dot(normalize(mix(Nr, V, 0.15) * sq), normalize((L + V) * sq)), 0.0), uShine);
+	float lit1 = step(cel, 0.5) * uSpec;
+	col = mix(col, mix(cBase, uLight, 0.8), smoothstep(0.42, 0.45, sp) * lit1);
+	col = mix(col, vec3(1.0), smoothstep(0.86, 0.89, sp) * lit1 * 0.85);
 	float side = dot(normalize(Nr.xy + vec2(1e-5)), normalize(L.xy + vec2(1e-5)));
 	float rimT = 1.0 - uRimWidth;
 	float rim = smoothstep(rimT, rimT + 0.035, fres * smoothstep(0.1, 0.85, side));
@@ -363,6 +387,10 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uRim: {value: o.rim ?? 0},
 			uRimWidth: {value: o.rimWidth ?? 0.3},
 			uEdge: {value: o.edge ?? 0},
+			uCel: {value: o.cel ?? 0},
+			uCelAt: {value: o.celAt ?? 0},
+			uSpec: {value: o.spec ?? 0},
+			uShine: {value: o.shine ?? 30},
 			uGround: {value: o.ground ?? 0},
 			uYRange: {value: new Vector2(...(o.yRange ?? [0, 1]))},
 			uPivot: {value: new Vector3(...(o.pivot ?? [0, 0, 0]))},

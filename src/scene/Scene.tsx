@@ -50,8 +50,8 @@ export const Scene: React.FC = () => {
 				<object3D attach="target" position={LIGHT_TARGET} />
 			</directionalLight>
 			<Room />
-			<Stickman variant="officer" pose={officerPose(frame)} />
-			<Stickman variant="civilian" pose={civilianPose(frame)} />
+			<Stickman variant="officer" pose={officerPose(frame)} trail={[officerPose(frame - 1), officerPose(frame - 2)]} />
+			<Stickman variant="civilian" pose={civilianPose(frame)} trail={[civilianPose(frame - 1), civilianPose(frame - 2)]} />
 		</>
 	);
 };

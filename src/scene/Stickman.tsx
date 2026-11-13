@@ -7,6 +7,7 @@ import {
 	Euler,
 	ExtrudeGeometry,
 	LatheGeometry,
+	MeshBasicMaterial,
 	Matrix3,
 	Matrix4,
 	Quaternion,
@@ -127,14 +128,14 @@ const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25
 const limbMat = toon({ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
 const starMat = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2});
 const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
-const visorMat = toon({ramp: P.visor, ...CHAR, rim: 0.7, rimWidth: 0.55, radius: 0.3});
+const visorMat = toon({ramp: P.visor, ...CHAR, spec: 1, shine: 50, rim: 0.7, rimWidth: 0.55, radius: 0.3});
 const bandMat = toon({ramp: P.uniformDark, ...CHAR, radius: 0.3});
-const mugMat = toon({ramp: P.mug, ...CHAR, radius: 0.08});
+const mugMat = toon({ramp: P.mug, ...CHAR, cel: 0.8, spec: 0.8, shine: 20, radius: 0.08});
 const charLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3});
 const propLine = outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1});
 
 const makeHeadMat = () =>
-	toon({ramp: P.skin, ...CHAR, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, radius: HEAD_R, pattern: 'face'});
+	toon({ramp: P.skin, ...CHAR, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.9, celAt: 0.05, radius: HEAD_R, pattern: 'face'});
 const makeBodyMat = (variant: Variant) =>
 	toon({
 		ramp: variant === 'officer' ? P.uniform : P.shirt,
@@ -145,13 +146,17 @@ const makeBodyMat = (variant: Variant) =>
 		rimWidth: 0.3,
 		ground: 0.3,
 		edge: 0.8,
+		cel: 0.9,
+		celAt: 0.15,
+		spec: 1,
+		shine: 60,
 		yRange: [0, BODY_H * 0.7],
 		pivot: [0, BODY_H / 2, 0],
 		radius: BODY_H / 2,
 		pattern: variant === 'officer' ? 'uniform' : 'none',
 	});
-const hatMat = toon({ramp: P.uniform, ...CHAR, edge: 0.5, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
-const hairMat = toon({ramp: P.hair, ...CHAR, rim: 0.6, rimWidth: 0.35, radius: 0.36});
+const hatMat = toon({ramp: P.uniform, ...CHAR, edge: 0.5, cel: 0.9, celAt: 0.15, spec: 1, shine: 22, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
+const hairMat = toon({ramp: P.hair, ...CHAR, cel: 0.85, celAt: 0.15, spec: 0.7, shine: 18, rim: 0.6, rimWidth: 0.35, radius: 0.36});
 
 // ---- limbs -----------------------------------------------------------------
 const v = (a: V3) => new Vector3(a[0], a[1], a[2]);
@@ -169,7 +174,7 @@ const solve = (root: Vector3, target: Vector3, len: number, pole: Vector3) => {
 	return [root, mid, root.clone().addScaledVector(d, dist)];
 };
 
-const Limb: React.FC<{pts: Vector3[]}> = ({pts}) => {
+const Limb: React.FC<{pts: Vector3[]; ghost?: MeshBasicMaterial}> = ({pts, ghost}) => {
 	const key = pts.map((p) => p.toArray().map((n) => n.toFixed(4)).join()).join('|');
 	const geo = useMemo(
 		// a soft curve through the joint, so limbs read as one drawn stroke
@@ -178,6 +183,7 @@ const Limb: React.FC<{pts: Vector3[]}> = ({pts}) => {
 		[key],
 	);
 	useEffect(() => () => geo.dispose(), [geo]);
+	if (ghost) return <mesh geometry={geo} material={ghost} />;
 	return (
 		<>
 			<mesh geometry={geo} material={limbMat} castShadow />
@@ -185,6 +191,19 @@ const Limb: React.FC<{pts: Vector3[]}> = ({pts}) => {
 			<mesh geometry={jointGeo} material={limbMat} position={pts[2]} castShadow />
 		</>
 	);
+};
+
+// Smear frames: when a hand moves fast, the arm's last two positions linger
+// as fading strokes, like the drawn motion smears in the reference.
+const smears = [0.5, 0.22].map(
+	(opacity) => new MeshBasicMaterial({color: P.line, transparent: true, opacity, depthWrite: false}),
+);
+const SMEAR_SPEED = 0.07; // metres per frame
+
+const armsOf = (pose: Pose) => {
+	const q = new Quaternion().setFromEuler(new Euler(pose.lean[0], pose.twist, -pose.lean[1], 'YXZ'));
+	const at = (x: number) => new Vector3(x, 0.63, 0).applyQuaternion(q).add(new Vector3(0, HIP_Y + pose.bob, 0));
+	return [solve(at(0.135), v(pose.handL), ARM, v(pose.elbowL)), solve(at(-0.135), v(pose.handR), ARM, v(pose.elbowR))];
 };
 
 // ---- character -------------------------------------------------------------
@@ -197,7 +216,7 @@ const Star: React.FC<{position: V3; rotation?: V3; size: number}> = ({position, 
 	</group>
 );
 
-export const Stickman: React.FC<{variant: Variant; pose: Pose}> = ({variant, pose}) => {
+export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> = ({variant, pose, trail = []}) => {
 	const camera = useThree((s) => s.camera);
 	const headMat = useMemo(makeHeadMat, []);
 	const bodyMat = useMemo(() => makeBodyMat(variant), [variant]);
@@ -246,9 +265,16 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose}> = ({variant, pos
 			<Limb pts={legR} />
 			<Limb pts={armL} />
 			<Limb pts={armR} />
+			{trail.map((past, k) =>
+				armsOf(past).map((pts, side) => {
+					const now = side === 0 ? armL : armR;
+					const before = armsOf(trail[0])[side];
+					return now[2].distanceTo(before[2]) > SMEAR_SPEED ? <Limb key={`${k}-${side}`} pts={pts} ghost={smears[k]} /> : null;
+				}),
+			)}
 
 			<group position={hip} rotation={bodyEuler}>
-				<Ink geometry={bodyGeo} material={bodyMat} line={charLine} />
+				<Ink geometry={bodyGeo} material={bodyMat} line={charLine} receive />
 				{variant === 'officer' ? (
 					<>
 						<mesh geometry={beltGeo} material={inkMat} position={[0, 0.2, 0]} />
