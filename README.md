@@ -9,6 +9,12 @@ npm run studio     # preview and scrub
 npm run render     # out/short.mp4
 ```
 
+There are two versions of the same scene:
+
+- `StickmanShort`: characters are 3D shapes shaded flat.
+- `StickmanShort2D`: characters are flat 2D cut-outs standing in the 3D room (`src/scene/Stickman2D.tsx`). Render it with `npx remotion render src/index.ts StickmanShort2D out/short-2d.mp4`.
+
+
 On a Linux machine without a GPU, render with `REMOTION_GL=swangle npm run render`.
 
 ## How the look works

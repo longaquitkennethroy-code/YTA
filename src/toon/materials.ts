@@ -82,6 +82,13 @@ export type ToonOptions = {
 	doubleSide?: boolean;
 	/** Metres to pull toward the camera in depth only. */
 	depthBias?: number;
+	/**
+	 * Flat cut-out mode. The mesh is a flat shape; the roundness is drawn on it
+	 * from its 2D outline (centre and half size), like shading a sticker.
+	 */
+	paper?: {center: [number, number]; half: [number, number]; roundY: number};
+	/** Which drawn view of the part is showing (shared, radians). */
+	viewYaw?: {value: number};
 	/** How strongly the window light patch shows on this surface (floors). */
 	sun?: number;
 };
@@ -99,6 +106,9 @@ varying vec3 vNormalV;
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
 varying vec2 vPlane;
+varying vec3 vBx;
+varying vec3 vBy;
+varying vec3 vBz;
 
 void main() {
 	#include <beginnormal_vertex>
@@ -118,6 +128,9 @@ void main() {
 	vViewPos = mvPosition.xyz;
 	vNormalV = normalize(transformedNormal);
 	vObjPos = position;
+	vBx = normalize(normalMatrix * vec3(1.0, 0.0, 0.0));
+	vBy = normalize(normalMatrix * vec3(0.0, 1.0, 0.0));
+	vBz = normalize(normalMatrix * vec3(0.0, 0.0, 1.0));
 	vWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
 
 	// Where this vertex sits on the object's camera-facing plane, in units of
@@ -193,6 +206,13 @@ varying vec3 vNormalV;
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
 varying vec2 vPlane;
+varying vec3 vBx;
+varying vec3 vBy;
+varying vec3 vBz;
+uniform vec2 uPaperC;
+uniform vec2 uPaperHalf;
+uniform float uPaperY;
+uniform float uViewYaw;
 
 float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -266,6 +286,19 @@ void main() {
 	vec3 Nr = normalize(vNormalV);
 	if (!gl_FrontFacing) Nr = -Nr;
 
+	#ifdef PAPER
+		// A flat shape has no form of its own, so the form is drawn: bulge the
+		// normal across the silhouette as an illustrator would shade it.
+		vec2 pb = clamp((vObjPos.xy - uPaperC) / uPaperHalf, -1.0, 1.0);
+		vec3 pn = vec3(pb.x, pb.y * uPaperY, 0.0);
+		pn.z = sqrt(1.0 - min(dot(pn.xy, pn.xy), 0.98));
+		Nr = normalize(vBx * pn.x + vBy * pn.y + vBz * pn.z);
+		// the same point on the imagined round form, turned to the drawn view
+		vec3 ps = vec3(pb, sqrt(1.0 - min(dot(pb, pb), 1.0)));
+		float cv = cos(uViewYaw), sv = sin(uViewYaw);
+		vec3 paperP = vec3(ps.x * cv + ps.z * sv, ps.y, -ps.x * sv + ps.z * cv);
+	#endif
+
 	// ---- pattern: pick between two ramps, and optional ink lines -----------
 	float alt = 0.0;
 	float ink = 0.0;
@@ -299,7 +332,11 @@ void main() {
 		alt = max(alt, fill(st - 0.004) * 0.45);
 	#elif PATTERN == 4
 		// shirt front: placket and two chest pockets, wrapped round the torso
-		float ang = atan(vObjPos.x, vObjPos.z);
+		#ifdef PAPER
+			float ang = mod(asin(pb.x) + uViewYaw + PI, PI2) - PI;
+		#else
+			float ang = atan(vObjPos.x, vObjPos.z);
+		#endif
 		vec2 bq = vec2(ang * 0.18, vObjPos.y);
 		float dl = max(abs(bq.x) - 0.004, max(0.22 - bq.y, bq.y - 0.74));
 		vec2 pq = vec2(abs(bq.x) - 0.088, bq.y - 0.5);
@@ -385,7 +422,11 @@ void main() {
 	col = mix(col, mix(cDeep, uLine, 0.35), ink);
 
 	#if PATTERN == 5
-		float f = faceInk(vObjPos);
+		#ifdef PAPER
+			float f = faceInk(paperP);
+		#else
+			float f = faceInk(vObjPos);
+		#endif
 		col = mix(col, mix(uLine, uLineLit, key * 0.35), f);
 	#endif
 
@@ -412,7 +453,7 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 	return new ShaderMaterial({
 		lights: true,
 		side: o.doubleSide ? DoubleSide : FrontSide,
-		defines: {PATTERN: PATTERNS[o.pattern ?? 'none']},
+		defines: {PATTERN: PATTERNS[o.pattern ?? 'none'], ...(o.paper ? {PAPER: 1} : {})},
 		uniforms: {
 			...UniformsUtils.clone(UniformsLib.lights),
 			...globals,
@@ -443,6 +484,10 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uPatScale: {value: o.patScale ?? 1},
 			uFogAmt: {value: o.fog ?? 0.35},
 			uDepthBias: o.depthBiasRef ?? {value: o.depthBias ?? 0},
+			uPaperC: {value: new Vector2(...(o.paper?.center ?? [0, 0]))},
+			uPaperHalf: {value: new Vector2(...(o.paper?.half ?? [1, 1]))},
+			uPaperY: {value: o.paper?.roundY ?? 1},
+			uViewYaw: o.viewYaw ?? {value: 0},
 			uEyes: {value: new Vector4(0, 0, 0, 0)},
 			uLook: {value: new Vector2(0, 0)},
 			uBrow: {value: new Vector4(0, 0, 0, 0)},

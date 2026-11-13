@@ -6,12 +6,15 @@ import {globals} from '../toon/materials';
 import {P} from '../toon/palette';
 import {Room} from './Room';
 import {Stickman} from './Stickman';
+import {Stickman2D} from './Stickman2D';
 import {cameraAt, civilianPose, officerPose} from './acting';
 import {moodAt} from './moods';
 
 const LIGHT_TARGET = new Vector3(0, 0, -1);
 
-export const Scene: React.FC = () => {
+export const Scene: React.FC<{flat?: boolean}> = ({flat}) => {
+	// flat: characters are 2D cut-outs in the 3D room
+	const Actor = flat ? Stickman2D : Stickman;
 	const frame = useCurrentFrame();
 	const camera = useThree((s) => s.camera) as PerspectiveCamera;
 
@@ -63,8 +66,8 @@ export const Scene: React.FC = () => {
 				<object3D attach="target" position={LIGHT_TARGET} />
 			</directionalLight>
 			<Room />
-			<Stickman variant="officer" pose={officerPose(frame)} trail={[officerPose(frame - 1), officerPose(frame - 2)]} />
-			<Stickman variant="civilian" pose={civilianPose(frame)} trail={[civilianPose(frame - 1), civilianPose(frame - 2)]} />
+			<Actor variant="officer" pose={officerPose(frame)} trail={[officerPose(frame - 1), officerPose(frame - 2)]} />
+			<Actor variant="civilian" pose={civilianPose(frame)} trail={[civilianPose(frame - 1), civilianPose(frame - 2)]} />
 		</>
 	);
 };

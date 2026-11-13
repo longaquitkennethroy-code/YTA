@@ -66,15 +66,15 @@ export type Pose = {
 };
 
 // ---- proportions -----------------------------------------------------------
-const HIP_Y = 0.74;
-const BODY_H = 0.82;
-const HEAD_R = 0.34;
-const LIMB_R = 0.03;
-const ARM = 0.37;
-const LEG = 0.385;
+export const HIP_Y = 0.74;
+export const BODY_H = 0.82;
+export const HEAD_R = 0.34;
+export const LIMB_R = 0.03;
+export const ARM = 0.37;
+export const LEG = 0.385;
 
 // ---- geometry (shared by all characters) -----------------------------------
-const bodyGeo = (() => {
+export const bodyGeo = (() => {
 	const rb = 0.205;
 	const rt = 0.165;
 	const pts: Vector2[] = [];
@@ -88,7 +88,7 @@ const bodyGeo = (() => {
 	}
 	return new LatheGeometry(pts, 40);
 })();
-const headGeo = new SphereGeometry(HEAD_R, 48, 32);
+export const headGeo = new SphereGeometry(HEAD_R, 48, 32);
 const jointGeo = new SphereGeometry(LIMB_R, 12, 8);
 const unitSphere = new SphereGeometry(1, 32, 20);
 
@@ -107,7 +107,7 @@ const crownGeo = new LatheGeometry(
 );
 const bandGeo = new CylinderGeometry(0.274, 0.268, 0.07, 40, 1, true);
 const beltGeo = new CylinderGeometry(0.207, 0.21, 0.075, 40, 1, true);
-const starGeo = (() => {
+export const starGeo = (() => {
 	const s = new Shape();
 	for (let i = 0; i < 10; i++) {
 		const r = i % 2 === 0 ? 1 : 0.42;
@@ -126,7 +126,7 @@ const mugGeo = new CylinderGeometry(0.055, 0.05, 0.11, 20);
 
 // ---- materials -------------------------------------------------------------
 // flat ~0.8: the lighting normal is 80% "a sheet of paper facing the camera".
-const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25};
+export const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25};
 
 // The whole head (and what it wears) is drawn in front of the torso, so the
 // head keeps a complete outline where it overlaps the body.
@@ -135,7 +135,7 @@ const BIAS = {officer: {value: 0.24}, civilian: {value: 0.24}};
 const HEAD = {depthBiasRef: BIAS.officer};
 const HEAD_CIV = {depthBiasRef: BIAS.civilian};
 
-const limbMat = toon({ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
+export const limbMat = toon({ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
 const starMat = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2});
 const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
 const starMatHead = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2, ...HEAD});
@@ -180,10 +180,10 @@ const hatMat = toon({ramp: P.uniform, ...CHAR, ...HEAD, bounce: 0.7, edge: 0.5, 
 const hairMat = toon({ramp: P.hair, ...CHAR, ...HEAD_CIV, bounce: 0.6, cel: 0.85, celAt: 0.15, spec: 0.7, shine: 18, rim: 0.6, rimWidth: 0.35, radius: 0.36});
 
 // ---- limbs -----------------------------------------------------------------
-const v = (a: V3) => new Vector3(a[0], a[1], a[2]);
+export const v = (a: V3) => new Vector3(a[0], a[1], a[2]);
 
 /** Two-bone IK: returns shoulder, elbow, hand. */
-const solve = (root: Vector3, target: Vector3, len: number, pole: Vector3) => {
+export const solve = (root: Vector3, target: Vector3, len: number, pole: Vector3) => {
 	const d = target.clone().sub(root);
 	const dist = Math.min(Math.max(d.length(), 1e-4), len * 2 * 0.999);
 	d.normalize();
@@ -195,7 +195,7 @@ const solve = (root: Vector3, target: Vector3, len: number, pole: Vector3) => {
 	return [root, mid, root.clone().addScaledVector(d, dist)];
 };
 
-const Limb: React.FC<{pts: Vector3[]; ghost?: MeshBasicMaterial}> = ({pts, ghost}) => {
+export const Limb: React.FC<{pts: Vector3[]; ghost?: MeshBasicMaterial}> = ({pts, ghost}) => {
 	const key = pts.map((p) => p.toArray().map((n) => n.toFixed(4)).join()).join('|');
 	const geo = useMemo(
 		// a soft curve through the joint, so limbs read as one drawn stroke
@@ -216,12 +216,12 @@ const Limb: React.FC<{pts: Vector3[]; ghost?: MeshBasicMaterial}> = ({pts, ghost
 
 // Smear frames: when a hand moves fast, the arm's last two positions linger
 // as fading strokes, like the drawn motion smears in the reference.
-const smears = [0.5, 0.22].map(
+export const smears = [0.5, 0.22].map(
 	(opacity) => new MeshBasicMaterial({color: P.line, transparent: true, opacity, depthWrite: false}),
 );
-const SMEAR_SPEED = 0.07; // metres per frame
+export const SMEAR_SPEED = 0.07; // metres per frame
 
-const armsOf = (pose: Pose) => {
+export const armsOf = (pose: Pose) => {
 	const q = new Quaternion().setFromEuler(new Euler(pose.lean[0], pose.twist, -pose.lean[1], 'YXZ'));
 	const at = (x: number) => new Vector3(x, 0.63, 0).applyQuaternion(q).add(new Vector3(0, HIP_Y + pose.bob, 0));
 	return [solve(at(0.135), v(pose.handL), ARM, v(pose.elbowL)), solve(at(-0.135), v(pose.handR), ARM, v(pose.elbowR))];
@@ -362,4 +362,30 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 			) : null}
 		</group>
 	);
+};
+
+/** The skeleton for a pose, in character space. Shared with the 2D cut-out renderer. */
+export const rigOf = (pose: Pose) => {
+	const bodyQ = new Quaternion().setFromEuler(new Euler(pose.lean[0], pose.twist, -pose.lean[1], 'YXZ'));
+	const hip = new Vector3(0, HIP_Y + pose.bob, 0);
+	const sy = 1 + pose.stretch;
+	const sx = 1 / Math.sqrt(sy);
+	const hy = 1 + pose.headStretch;
+	const hx = 1 / Math.sqrt(hy);
+	const onBody = (x: number, y: number, z: number) => new Vector3(x * sx, y * sy, z * sx).applyQuaternion(bodyQ).add(hip);
+	const fwd = new Vector3(0, 0.15, 1);
+	return {
+		hip,
+		bodyQ,
+		top: onBody(0, BODY_H, 0),
+		headPos: onBody(0, BODY_H, 0).add(new Vector3(0, 0.2, 0)).add(v(pose.headOffset)),
+		armL: solve(onBody(0.135, 0.63, 0), v(pose.handL), ARM, v(pose.elbowL)),
+		armR: solve(onBody(-0.135, 0.63, 0), v(pose.handR), ARM, v(pose.elbowR)),
+		legL: solve(onBody(0.085, 0.05, 0), v(pose.footL), LEG, fwd),
+		legR: solve(onBody(-0.085, 0.05, 0), v(pose.footR), LEG, fwd),
+		sx,
+		sy,
+		hx,
+		hy,
+	};
 };

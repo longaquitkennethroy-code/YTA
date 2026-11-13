@@ -21,7 +21,7 @@ const whip = (frame: number) => {
 	return {};
 };
 
-export const Short: React.FC = () => {
+export const Short: React.FC<{flat?: boolean}> = ({flat}) => {
 	const frame = useCurrentFrame();
 	const mood = moodAt(frame);
 	const {width, height} = useVideoConfig();
@@ -34,7 +34,7 @@ export const Short: React.FC = () => {
 		<AbsoluteFill style={{backgroundColor: '#0c0a1a'}}>
 			<AbsoluteFill style={whip(frame)}>
 			<ThreeCanvas width={width} height={height} flat shadows gl={{antialias: true}} camera={{fov: 50, near: 0.1, far: 60}}>
-				<Scene />
+				<Scene flat={flat} />
 			</ThreeCanvas>
 			</AbsoluteFill>
 			{/* grade: cool lavender falling from the top, warm lift from the floor */}
