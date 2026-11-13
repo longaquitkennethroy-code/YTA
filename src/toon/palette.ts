@@ -112,6 +112,7 @@ export const P = {
 	lamp: ramp(0.74, 0.1, 178),
 
 	// atmosphere
+	sun: oklch(0.93, 0.13, 88),
 	fog: oklch(0.955, 0.03, 88),
 	keyTint: oklch(1.0, 0.02, 95),
 	ambTint: oklch(0.93, 0.03, 275),

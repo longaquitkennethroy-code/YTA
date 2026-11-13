@@ -133,20 +133,20 @@ export const civilianPose = (f: number): Pose => {
 };
 
 // ---- camera ----------------------------------------------------------------
-export type Shot = {pos: V3; target: V3; fov: number};
+export type Shot = {pos: V3; target: V3; fov: number; roll: number};
 
 export const cameraAt = (f: number): Shot => {
 	if (f < SHOT_B) {
 		// low and close on the officer; slow push-in with a sideways drift
 		const t = key(f, [0, SHOT_B], [0, 1]);
-		return {pos: lerp3([1.4, 0.98, 3.7], [1.15, 1.06, 3.35], t), target: [0.55, 1.42, 0.6], fov: 52};
+		return {pos: lerp3([1.3, 0.8, 3.15], [1.1, 0.88, 2.9], t), target: [0.58, 1.5, 0.6], fov: 64, roll: lerp(-0.07, -0.03, t)};
 	}
 	if (f < SHOT_C) {
 		// reverse angle from the kitchen, over the civilian's shoulder
 		const t = key(f, [SHOT_B, SHOT_C], [0, 1]);
-		return {pos: lerp3([-1.4, 1.62, -5.95], [-1.6, 1.66, -5.8], t), target: [0.7, 1.2, 0.6], fov: 46};
+		return {pos: lerp3([-1.4, 1.62, -5.95], [-1.6, 1.66, -5.8], t), target: [0.7, 1.2, 0.6], fov: 50, roll: 0.06};
 	}
 	// side-on two-shot, arcing round as they meet
 	const t = key(f, [SHOT_C, 390], [0, 1]);
-	return {pos: lerp3([-2.5, 1.2, 2.7], [-1.8, 1.3, 3.4], t), target: [0.55, 1.25, 0.0], fov: 50};
+	return {pos: lerp3([-2.5, 1.2, 2.7], [-1.8, 1.3, 3.4], t), target: [0.55, 1.25, 0.0], fov: 56, roll: lerp(-0.06, -0.02, t)};
 };

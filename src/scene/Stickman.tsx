@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo} from 'react';
+import {useThree} from '@react-three/fiber';
 import {
 	CatmullRomCurve3,
 	ConeGeometry,
@@ -6,6 +7,8 @@ import {
 	Euler,
 	ExtrudeGeometry,
 	LatheGeometry,
+	Matrix3,
+	Matrix4,
 	Quaternion,
 	Shape,
 	ShaderMaterial,
@@ -127,7 +130,7 @@ const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
 const visorMat = toon({ramp: P.visor, ...CHAR, rim: 0.7, rimWidth: 0.55, radius: 0.3});
 const bandMat = toon({ramp: P.uniformDark, ...CHAR, radius: 0.3});
 const mugMat = toon({ramp: P.mug, ...CHAR, radius: 0.08});
-const charLine = outline({width: 0.017, thin: 0.5, thick: 1.6, seed: 1.3});
+const charLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3});
 const propLine = outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1});
 
 const makeHeadMat = () =>
@@ -194,6 +197,7 @@ const Star: React.FC<{position: V3; rotation?: V3; size: number}> = ({position, 
 );
 
 export const Stickman: React.FC<{variant: Variant; pose: Pose}> = ({variant, pose}) => {
+	const camera = useThree((s) => s.camera);
 	const headMat = useMemo(makeHeadMat, []);
 	const bodyMat = useMemo(() => makeBodyMat(variant), [variant]);
 
@@ -218,6 +222,22 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose}> = ({variant, pos
 	u.uLook.value.set(f.look[0], f.look[1]);
 	u.uBrow.value.set(f.browL[0], f.browL[1], f.browR[0], f.browR[1]);
 	u.uMouth.value.set(...f.mouth);
+
+	// Where is the camera, as seen from inside the head? Swing the drawn face
+	// part of the way toward it, and drop it once we are looking at the back.
+	const toCam = camera.position
+		.clone()
+		.sub(v(pose.pos))
+		.applyAxisAngle(new Vector3(0, 1, 0), -pose.yaw)
+		.sub(headPos)
+		.applyQuaternion(headQ.clone().invert())
+		.normalize();
+	const off = Math.acos(Math.min(1, Math.max(-1, toCam.z)));
+	const cheat = Math.min(off * 0.55, 0.8);
+	const axis = new Vector3(-toCam.y, toCam.x, 0);
+	if (axis.lengthSq() < 1e-8) axis.set(0, 1, 0);
+	(u.uFaceRot.value as Matrix3).setFromMatrix4(new Matrix4().makeRotationAxis(axis.normalize(), -cheat));
+	u.uFaceFade.value = 1 - Math.min(1, Math.max(0, (off - 1.95) / 0.3));
 
 	return (
 		<group position={pose.pos} rotation={[0, pose.yaw, 0]}>

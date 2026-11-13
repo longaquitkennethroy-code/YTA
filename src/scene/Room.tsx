@@ -14,13 +14,13 @@ const prop = (ramp: Ramp, radius: number, extra: object = {}) =>
 	toon({ramp, flat: 0.45, grad: 0.22, band: 0.5, soft: 0.05, deep: 0.6, radius, ...extra});
 
 const M = {
-	wood: arch(P.wood, 5, {pattern: 'wood', alt: P.woodAlt, grad: 0.22}),
+	wood: arch(P.wood, 5, {pattern: 'wood', alt: P.woodAlt, grad: 0.22, sun: 1}),
 	wall: arch(P.wall, 3.5, {pattern: 'wallpaper', alt: P.wallMotif, patScale: 0.34}),
 	wallUpper: arch(P.wallUpper, 3.5),
 	ceiling: arch(P.wallUpper, 5, {flat: 1, band: 0.3}),
 	trim: arch(P.trim, 1.5),
-	rug: arch(P.rug, 2.4, {grad: 0.2}),
-	rugBorder: arch(P.rugBorder, 2.4),
+	rug: arch(P.rug, 2.4, {grad: 0.2, pattern: 'carpet', alt: P.wallMotif, sun: 1}),
+	rugBorder: arch(P.rugBorder, 2.4, {sun: 1}),
 	sofa: prop(P.sofa, 1.2, {rim: 0.5, rimWidth: 0.25}),
 	sofaDark: prop(P.sofaDark, 1.2),
 	table: prop(P.woodAlt, 0.5),

@@ -3,6 +3,7 @@ import {
 	Color,
 	DoubleSide,
 	FrontSide,
+	Matrix3,
 	ShaderMaterial,
 	UniformsLib,
 	UniformsUtils,
@@ -25,9 +26,12 @@ export const globals = {
 	uAmbTint: {value: P.ambTint.clone()},
 	uLine: {value: P.line.clone()},
 	uLineLit: {value: P.lineLit.clone()},
+	/** Window light falling on the floor: xz centre, xz half size. */
+	uSunRect: {value: new Vector4(0.7, 2.3, 1.0, 1.5)},
+	uSunColor: {value: P.sun.clone()},
 };
 
-const PATTERNS = {none: 0, wood: 1, checker: 2, wallpaper: 3, uniform: 4, face: 5} as const;
+const PATTERNS = {none: 0, wood: 1, checker: 2, wallpaper: 3, uniform: 4, face: 5, carpet: 6} as const;
 export type Pattern = keyof typeof PATTERNS;
 
 export type ToonOptions = {
@@ -55,6 +59,8 @@ export type ToonOptions = {
 	patScale?: number;
 	fog?: number;
 	doubleSide?: boolean;
+	/** How strongly the window light patch shows on this surface (floors). */
+	sun?: number;
 };
 
 const toonVertex = /* glsl */ `
@@ -132,6 +138,11 @@ uniform vec4 uEyes;   // blinkL, blinkR, lid, glasses
 uniform vec2 uLook;
 uniform vec4 uBrow;   // heightL, angleL, heightR, angleR
 uniform vec4 uMouth;  // width, open, curve, offsetY
+uniform mat3 uFaceRot;
+uniform float uFaceFade;
+uniform vec4 uSunRect;
+uniform vec3 uSunColor;
+uniform float uSun;
 
 varying vec3 vViewPos;
 varying vec3 vNormalV;
@@ -162,7 +173,9 @@ float fill(float d) {
 // +Z (face) axis with an azimuthal projection, so the features are 2D ink but
 // they live on the 3D head: turn the head and they slide round with it.
 float faceInk(vec3 p) {
-	p = normalize(p);
+	// uFaceRot swings the face part-way toward the camera, the way a 2D
+	// animator keeps a face readable when the head is turned.
+	p = uFaceRot * normalize(p);
 	float th = acos(clamp(p.z, -1.0, 1.0));
 	if (th > 2.2) return 0.0;
 	vec2 uv = th * normalize(p.xy + vec2(1e-6));
@@ -199,7 +212,7 @@ float faceInk(vec3 p) {
 		d = min(d, sdSegment(q, vec2(0.0, 0.15), vec2(0.135, 0.13)) - 0.018);
 		d = min(d, sdSegment(q, vec2(0.53, 0.13), vec2(1.45, 0.2)) - 0.018);
 	}
-	return fill(d);
+	return fill(d) * uFaceFade;
 }
 #endif
 
@@ -238,6 +251,8 @@ void main() {
 		float dm = sdSegment(c, vec2(0.0, -0.13), vec2(0.0, 0.02)) - 0.018;
 		dm = min(dm, sdSegment(vec2(abs(c.x), c.y), vec2(0.0, 0.02), vec2(0.075, 0.12)) - 0.018);
 		alt = fill(dm);
+		float st = abs(fract((vWorldPos.x + vWorldPos.z) / uPatScale * 2.0) - 0.5) * uPatScale * 0.5;
+		alt = max(alt, fill(st - 0.004) * 0.45);
 	#elif PATTERN == 4
 		// shirt front: placket and two chest pockets, wrapped round the torso
 		float ang = atan(vObjPos.x, vObjPos.z);
@@ -247,6 +262,13 @@ void main() {
 		dl = min(dl, abs(sdRoundBox(pq, vec2(0.04, 0.036), 0.012)) - 0.0045);
 		dl = min(dl, max(abs(pq.y - 0.022) - 0.004, abs(pq.x) - 0.05));
 		ink = fill(dl) * 0.85;
+	#elif PATTERN == 6
+		// carpet: soft clumpy pile
+		vec2 cp = vWorldPos.xz * 9.0;
+		vec2 ci = floor(cp), cf = fract(cp);
+		cf = cf * cf * (3.0 - 2.0 * cf);
+		float n = mix(mix(hash2(ci), hash2(ci + vec2(1, 0)), cf.x), mix(hash2(ci + vec2(0, 1)), hash2(ci + vec2(1, 1)), cf.x), cf.y);
+		alt = smoothstep(0.35, 0.75, n) * 0.6;
 	#endif
 
 	vec3 cBase = mix(uBase, uAltBase, alt);
@@ -282,6 +304,17 @@ void main() {
 	float rim = smoothstep(rimT, rimT + 0.035, fres * smoothstep(0.1, 0.85, side));
 	rim *= smoothstep(-0.3, 0.2, L.z + 0.25) * shadow;
 	col = mix(col, uLight, rim * uRim);
+
+	// warm window light on the floor, split into panes, skewed by the sun
+	if (uSun > 0.0) {
+		vec2 sp = vWorldPos.xz - uSunRect.xy;
+		sp.x += sp.y * 0.35;
+		vec2 sq = abs(sp) - uSunRect.zw;
+		float inside = 1.0 - smoothstep(-0.12, 0.0, max(sq.x, sq.y));
+		vec2 pane = abs(fract(sp / (uSunRect.zw * vec2(1.0, 0.6667)) * 0.5 + 0.5) - 0.5);
+		float bars = smoothstep(0.02, 0.07, min(pane.x * uSunRect.z, pane.y * uSunRect.w));
+		col = mix(col, col * 0.55 + uSunColor * 0.6, inside * bars * shadow * uSun);
+	}
 
 	col = mix(col, mix(cDeep, uLine, 0.35), ink);
 
@@ -335,6 +368,9 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uLook: {value: new Vector2(0, 0)},
 			uBrow: {value: new Vector4(0, 0, 0, 0)},
 			uMouth: {value: new Vector4(0.1, 0, 0, 0)},
+			uFaceRot: {value: new Matrix3()},
+			uFaceFade: {value: 1},
+			uSun: {value: o.sun ?? 0},
 		},
 		vertexShader: toonVertex,
 		fragmentShader: toonFragment,

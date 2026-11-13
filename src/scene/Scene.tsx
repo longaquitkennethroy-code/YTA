@@ -22,6 +22,7 @@ export const Scene: React.FC = () => {
 	camera.near = 0.1;
 	camera.far = 60;
 	camera.lookAt(...shot.target);
+	camera.rotateZ(shot.roll);
 	camera.updateProjectionMatrix();
 	camera.updateMatrixWorld();
 
