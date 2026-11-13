@@ -1,6 +1,6 @@
 import {Easing, interpolate} from 'remotion';
 import type {Pose} from './Stickman';
-import {SHOT_B, SHOT_C, talk} from './timeline';
+import {SHOT_B, SHOT_C, accent, talk} from './timeline';
 
 type V3 = [number, number, number];
 
@@ -14,6 +14,17 @@ const smooth = (f: number, frames: number[], values: number[]) =>
 const snap = Easing.bezier(0.2, 1.4, 0.35, 1);
 const key = (f: number, frames: number[], values: number[]) =>
 	interpolate(f, frames, values, {...CLAMP, easing: snap});
+// Anticipation: wind up the wrong way first, then go, then overshoot.
+const windUp = Easing.bezier(0.5, -0.55, 0.3, 1.4);
+const act = (f: number, frames: number[], values: number[]) =>
+	interpolate(f, frames, values, {...CLAMP, easing: windUp});
+/** Squash on the wind-up, stretch through the move, settle: for any 0..1 action track. */
+const smear = (now: number, before: number) => Math.max(-0.1, Math.min(0.14, (now - before) * 0.9));
+/** Eyes do not glide, they dart: a new small offset every ~0.7s. */
+const dart = (f: number, seed: number) => {
+	const x = Math.sin((Math.floor(f / 21) + seed) * 91.7) * 43758.5453;
+	return (x - Math.floor(x) - 0.5) * 0.3;
+};
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerp3 = (a: V3, b: V3, t: number): V3 => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const wave = (f: number, period: number, phase = 0) => Math.sin((f / period) * Math.PI * 2 + phase);
@@ -32,26 +43,33 @@ const YAW_TO_DOOR = -2.66;
 export const officerPose = (f: number): Pose => {
 	const breathe = wave(f, 75);
 	const turnHead = key(f, [106, 124], [0, 1]);
-	const turnBody = key(f, [113, 138], [0, 1]);
+	const turnBody = act(f, [112, 136], [0, 1]);
 	const yaw = lerp(YAW_FRONT, YAW_TO_DOOR, turnBody);
 
 	// A: sweeps the room, then hears the slurp and turns round
 	const surveying = key(f, [0, 26, 52, 84, 104], [0.38, -0.42, -0.3, 0.12, 0.05]);
-	const lean = key(f, [SHOT_C + 48, SHOT_C + 72], [0, 1]); // C: leans in, unconvinced
+	const leanAt = (t: number) => act(t, [SHOT_C + 48, SHOT_C + 68], [0, 1]);
+	const lean = leanAt(f); // C: leans in, unconvinced
+	const leanLate = leanAt(f - 4); // the head arrives after the chest (overlap)
 	const aside = key(f, [SHOT_C + 96, SHOT_C + 110], [0, 1]);
 	const headYaw =
 		lerp(surveying, 0, turnBody) +
-		(lerp(YAW_FRONT, YAW_TO_DOOR, turnHead) - yaw) +
+		// the head leads the turn, but only as far as a neck allows
+		Math.max(-0.75, Math.min(0.75, lerp(YAW_FRONT, YAW_TO_DOOR, turnHead) - yaw)) +
 		(f >= SHOT_B ? wave(f, 120) * 0.05 : 0) +
 		// side-on shot: cheat both faces toward the lens, as a 2D animator would
 		(f >= SHOT_C ? 0.6 : 0) +
 		aside * 0.45;
 
 	// right hand leaves the hip to gesture at "who moved the furniture?"
-	const gesture = key(f, [50, 62, 92, 106], [0, 1, 1, 0]);
+	const gestureAt = (t: number) => act(t, [48, 60, 92, 106], [0, 1, 1, 0]);
+	const gesture = gestureAt(f);
+	const hit = accent(f, 'officer');
+	const shift = wave(f, 170, 0.6); // slow weight shift from foot to foot
 	const hipL: V3 = [0.2, 0.9, 0.03];
 	const hipR: V3 = [-0.2, 0.9, 0.03];
-	const out: V3 = [-0.5, 1.22 + wave(f, 14) * 0.02, 0.3];
+	// the hand travels on an arc, not a straight line, and bounces on each word
+	const out: V3 = [-0.5, 1.22 + hit * 0.05 + Math.sin(Math.min(1, Math.max(0, gesture)) * Math.PI) * 0.14, 0.3];
 
 	// little shuffle of the feet while turning
 	const stepL = Math.sin(key(f, [113, 124], [0, 1]) * Math.PI) * 0.09;
@@ -62,15 +80,17 @@ export const officerPose = (f: number): Pose => {
 	return {
 		pos: OFFICER,
 		yaw,
-		bob: breathe * 0.008 - lean * 0.02,
-		lean: [0.07 + lean * 0.2, 0.05 - lean * 0.03],
-		twist: 0,
+		bob: breathe * 0.008 - lean * 0.02 - hit * 0.012,
+		lean: [0.07 + lean * 0.2 + hit * 0.025, 0.05 - lean * 0.03 + shift * 0.035],
+		twist: gesture * -0.12 + shift * 0.03,
+		stretch: breathe * 0.012 + hit * 0.03 + smear(turnBody, act(f - 2, [112, 136], [0, 1])) + smear(lean, leanAt(f - 2)) * 0.6,
+		headStretch: hit * 0.025 + smear(turnHead, key(f - 2, [106, 124], [0, 1])) * 0.5,
 		headYaw,
-		headPitch: -0.04 + lean * 0.1 + wave(f, 90, 1) * 0.015,
-		headRoll: 0.05 + wave(f, 110) * 0.02 + lean * 0.09,
-		headOffset: [0, breathe * 0.006, lean * 0.1],
+		headPitch: -0.04 + leanLate * 0.1 + wave(f, 90, 1) * 0.015 + hit * 0.05,
+		headRoll: 0.05 + wave(f, 110) * 0.02 + leanLate * 0.09 - shift * 0.03,
+		headOffset: [shift * 0.012, breathe * 0.006 + hit * 0.014, leanLate * 0.1],
 		handL: hipL,
-		handR: lerp3(hipR, out, gesture),
+		handR: lerp3(hipR, out, gestureAt(f - 1)),
 		elbowL: [1, 0.1, -0.5],
 		elbowR: [-1, lerp(0.1, -0.6, gesture), -0.5],
 		footL: [0.13, 0.03 + stepL, 0.02],
@@ -78,8 +98,8 @@ export const officerPose = (f: number): Pose => {
 		face: {
 			blink: blink(f, [34, 120, 198, 262, 300, 360]),
 			lid: 0.36 + squint,
-			look: [key(f, [0, 26, 84], [0.5, -0.6, 0]) * (1 - turnBody) + aside * 0.9 - (f >= SHOT_C ? 0.5 * (1 - aside) : 0), 0],
-			browL: [0.06 + speaking * 0.015 + lean * 0.05, -0.12],
+			look: [dart(f, 3) * (1 - gesture) + key(f, [0, 26, 84], [0.5, -0.6, 0]) * (1 - turnBody) + aside * 0.9 - (f >= SHOT_C ? 0.5 * (1 - aside) : 0), 0],
+			browL: [0.06 + hit * 0.05 + lean * 0.05, -0.12],
 			browR: [-0.02 - lean * 0.03, 0.2 + lean * 0.2],
 			mouth: [0.105 - speaking * 0.045, speaking * 0.05, -0.05 - lean * 0.06, 0],
 		},
@@ -95,15 +115,22 @@ export const civilianPose = (f: number): Pose => {
 	const arrived = key(f, [SHOT_C + 56, SHOT_C + 70], [0, 1]);
 
 	const sip = key(f, [92, 100, 110, 118], [0, 1, 1, 0]); // the slurp that gives him away
-	const shrug = key(f, [158, 170, 244, 258], [0, 1, 1, 0]);
+	const shrugAt = (t: number) => act(t, [156, 168, 244, 258], [0, 1, 1, 0]);
+	const shrug = shrugAt(f);
+	const hit = accent(f, 'civilian');
+	const jump = pulse(f, 121, 4); // startled hop: stretch up, squash on landing
+	const land = pulse(f, 126, 3);
+	const stepHit = walking * Math.pow(Math.abs(Math.cos(theta)), 6); // each footfall
 	const caught = key(f, [118, 126], [0, 1]) * (1 - key(f, [150, 160], [0, 1]));
 	const nervous = key(f, [SHOT_C + 70, SHOT_C + 84], [0, 1]);
 
 	const hang: V3 = [0.25, 0.82, 0.03];
 	const mugRest: V3 = [-0.17, 1.12, 0.22];
 	const mugSip: V3 = [-0.06, 1.62, 0.3];
-	let handL = lerp3(hang, [0.48, 1.28, 0.16], shrug);
-	let handR = lerp3(lerp3(mugRest, mugSip, sip), [-0.46, 1.26, 0.2], shrug);
+	// hands trail the shoulders by a couple of frames (overlapping action)
+	const shrugLate = shrugAt(f - 2);
+	let handL = lerp3(hang, [0.48, 1.28 + hit * 0.04, 0.16], shrugLate);
+	let handR = lerp3(lerp3(mugRest, mugSip, sip), [-0.46, 1.26 + hit * 0.04, 0.2], shrugLate);
 	// arms swing against the legs while walking
 	handL = lerp3(handL, [0.25, 0.86, -0.2 * Math.sin(theta)], walking);
 	handR = lerp3(handR, [-0.2, 1.1, 0.2 + 0.03 * Math.sin(theta)], walking);
@@ -113,23 +140,25 @@ export const civilianPose = (f: number): Pose => {
 	return {
 		pos: lerp3(DOOR, MARK, walkP),
 		yaw: 0.483,
-		bob: sway * 0.006 + walking * (Math.abs(Math.sin(theta)) * 0.035 - 0.02) + shrug * 0.03 - caught * 0.02,
+		bob: sway * 0.006 + walking * (Math.abs(Math.sin(theta)) * 0.035 - 0.02) + shrug * 0.03 - caught * 0.02 + jump * 0.07 - land * 0.03 - hit * 0.01,
+		stretch: sway * 0.01 + jump * 0.13 - land * 0.1 + smear(shrug, shrugAt(f - 2)) - stepHit * 0.06 + hit * 0.03,
+		headStretch: jump * 0.06 - land * 0.07 - stepHit * 0.03 + hit * 0.02,
 		lean: [walking * 0.1 - arrived * 0.1 + sip * -0.06, sway * 0.025 + walking * Math.sin(theta) * 0.04],
 		twist: walking * Math.sin(theta) * 0.12,
 		headYaw: sway * 0.06 * (1 - walking) - (f >= SHOT_C ? 0.5 : 0) - nervous * 0.25,
 		headPitch: -sip * 0.3 + shrug * 0.05 + nervous * 0.08,
 		headRoll: shrug * -0.14 + sway * 0.03 + nervous * 0.1,
-		headOffset: [0, shrug * -0.025 + caught * 0.03, 0],
+		headOffset: [0, shrug * -0.025 + caught * 0.03 + jump * 0.04 - stepHit * 0.02 + hit * 0.012, 0],
 		handL,
 		handR,
 		elbowL: [1, lerp(-0.2, -0.9, shrug) + nervous * 1.2, -0.6],
 		elbowR: [-1, lerp(-0.6, -0.9, shrug), -0.4],
-		footL: [0.11, 0.03 + walking * Math.max(0, Math.cos(theta)) * 0.14, walking * 0.27 * Math.sin(theta)],
-		footR: [-0.11, 0.03 + walking * Math.max(0, -Math.cos(theta)) * 0.14, -walking * 0.27 * Math.sin(theta)],
+		footL: [0.11, 0.03 + jump * 0.06 + walking * Math.max(0, Math.cos(theta)) * 0.14, walking * 0.27 * Math.sin(theta)],
+		footR: [-0.11, 0.03 + jump * 0.06 + walking * Math.max(0, -Math.cos(theta)) * 0.14, -walking * 0.27 * Math.sin(theta)],
 		face: {
 			blink: blink(f, [22, 70, 129, 136, 215, 290, 352, 372]),
 			lid: 0,
-			look: [(f >= SHOT_C ? 0.6 : 0) * (1 - nervous) - nervous * 0.8 + caught * 0.3, sip * 0.6],
+			look: [dart(f, 11) + (f >= SHOT_C ? 0.6 : 0) * (1 - nervous) - nervous * 0.8 + caught * 0.3, sip * 0.6],
 			browL: [0.03 + caught * 0.07 + shrug * 0.05 + nervous * 0.04, -0.1 - shrug * 0.25],
 			browR: [0.03 + caught * 0.07 + shrug * 0.05, -0.1 - shrug * 0.25 - nervous * 0.15],
 			mouth: [0.075 + nervous * 0.05 - speaking * 0.03, speaking * 0.045 + caught * 0.025, 0.02 + nervous * 0.1 - shrug * 0.04, 0],

@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {ThreeCanvas} from '@remotion/three';
 import {AbsoluteFill, continueRender, delayRender, useCurrentFrame, useVideoConfig} from 'remotion';
 import {SHOT_B, SHOT_C} from './scene/timeline';
+import {moodAt} from './scene/moods';
 import {Captions} from './Captions';
 import {Scene} from './scene/Scene';
 
@@ -22,6 +23,7 @@ const whip = (frame: number) => {
 
 export const Short: React.FC = () => {
 	const frame = useCurrentFrame();
+	const mood = moodAt(frame);
 	const {width, height} = useVideoConfig();
 	const [handle] = useState(() => delayRender('fonts'));
 	useEffect(() => {
@@ -38,7 +40,7 @@ export const Short: React.FC = () => {
 			{/* grade: cool lavender falling from the top, warm lift from the floor */}
 			<AbsoluteFill
 				style={{
-					background: 'linear-gradient(180deg, rgba(150,140,255,0.3) 0%, rgba(150,140,255,0) 38%, rgba(255,214,150,0) 62%, rgba(255,205,140,0.16) 100%)',
+					background: `linear-gradient(180deg, ${mood.gradeTop} 0%, rgba(255,255,255,0) 42%, rgba(255,255,255,0) 60%, ${mood.gradeBottom} 100%)`,
 					mixBlendMode: 'multiply',
 				}}
 			/>

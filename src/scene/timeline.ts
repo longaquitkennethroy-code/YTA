@@ -27,6 +27,10 @@ export const WORDS: Word[] = [
 	{text: 'was.', from: 364, to: 386, who: 'officer'},
 ];
 
+/** A quick hit on the first frames of each word: speech drives the whole body. */
+export const accent = (frame: number, who: Word['who']) =>
+	WORDS.reduce((m, w) => (w.who === who ? Math.max(m, Math.max(0, 1 - Math.abs(frame - w.from - 1.5) / 3.5)) : m), 0);
+
 /** 0..1 mouth-open amount for a speaker. */
 export const talk = (frame: number, who: Word['who']) => {
 	for (const w of WORDS) {

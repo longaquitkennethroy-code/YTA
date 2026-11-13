@@ -29,6 +29,15 @@ export const globals = {
 	/** Window light falling on the floor: xz centre, xz half size. */
 	uSunRect: {value: new Vector4(0.7, 2.3, 1.0, 1.5)},
 	uSunColor: {value: P.sun.clone()},
+	uSunAmt: {value: 1},
+	/** Mood gradient: tint at floor level and at ceiling level. */
+	uFloorTint: {value: new Color(1, 1, 1)},
+	uSkyTint: {value: new Color(1, 1, 1)},
+	/** A practical lamp: warm pool of light with a soft falloff. */
+	uLampPos: {value: new Vector3(2.45, 1.55, 0.35)},
+	uLampColor: {value: new Color(1, 0.8, 0.5)},
+	uLampAmt: {value: 0},
+	uLampRadius: {value: 4.2},
 };
 
 const PATTERNS = {none: 0, wood: 1, checker: 2, wallpaper: 3, uniform: 4, face: 5, carpet: 6} as const;
@@ -56,6 +65,10 @@ export type ToonOptions = {
 	/** Hard-edged specular highlight: strength and tightness. */
 	spec?: number;
 	shine?: number;
+	/** Reflected light: a soft lighter band inside the shadow, near its outer edge. */
+	bounce?: number;
+	/** Share one depth-bias uniform between materials (see depthBias). */
+	depthBiasRef?: {value: number};
 	/** Extra darkening toward the bottom of the object (object-space y range). */
 	ground?: number;
 	yRange?: [number, number];
@@ -142,6 +155,14 @@ uniform float uCel;
 uniform float uCelAt;
 uniform float uSpec;
 uniform float uShine;
+uniform float uBounce;
+uniform float uSunAmt;
+uniform vec3 uFloorTint;
+uniform vec3 uSkyTint;
+uniform vec3 uLampPos;
+uniform vec3 uLampColor;
+uniform float uLampAmt;
+uniform float uLampRadius;
 uniform float uGround;
 uniform vec2 uYRange;
 uniform float uPatScale;
@@ -322,6 +343,7 @@ void main() {
 
 	// crisp rim highlight hugging the lit edge
 	float fres = 1.0 - max(dot(Nr, V), 0.0);
+	float side = dot(normalize(Nr.xy + vec2(1e-5)), normalize(L.xy + vec2(1e-5)));
 	col = mix(col, cDeep, pow(fres, 2.4) * uEdge);
 
 	// cel core shadow: one hard-edged shape on the side away from the light
@@ -333,25 +355,31 @@ void main() {
 	// cel specular: a hard-edged glint, with a brighter core inside it
 	// (the up axis is squashed so tall shapes always catch a vertical streak)
 	vec3 sq = vec3(1.0, 0.35, 1.0);
-	float sp = pow(max(dot(normalize(mix(Nr, V, 0.15) * sq), normalize((L + V) * sq)), 0.0), uShine);
+	// Placement: a highlight belongs on the lit side, between the middle of the
+	// form and its lit edge, never in shadow. Weighting the half-vector toward
+	// the light pushes it off-centre to roughly a third of the way in.
+	float sp = pow(max(dot(normalize(mix(Nr, V, 0.15) * sq), normalize((L * 1.5 + V) * sq)), 0.0), uShine);
 	float lit1 = step(cel, 0.5) * uSpec;
+	// Reflected light: the shadow is never flat. Light bouncing off the room
+	// lifts a band just inside the shadow's outer edge, kept clear of the line.
+	float bounce = smoothstep(0.55, 0.7, fres) * (1.0 - smoothstep(0.86, 0.93, fres)) * smoothstep(0.2, 0.7, -side);
+	col = mix(col, mix(cShade, cBase, 0.55) * uSkyTint, bounce * step(0.5, cel) * uBounce);
 	col = mix(col, mix(cBase, uLight, 0.8), smoothstep(0.42, 0.45, sp) * lit1);
 	col = mix(col, vec3(1.0), smoothstep(0.86, 0.89, sp) * lit1 * 0.85);
-	float side = dot(normalize(Nr.xy + vec2(1e-5)), normalize(L.xy + vec2(1e-5)));
 	float rimT = 1.0 - uRimWidth;
 	float rim = smoothstep(rimT, rimT + 0.035, fres * smoothstep(0.1, 0.85, side));
 	rim *= smoothstep(-0.3, 0.2, L.z + 0.25) * shadow;
 	col = mix(col, uLight, rim * uRim);
 
 	// warm window light on the floor, split into panes, skewed by the sun
-	if (uSun > 0.0) {
+	if (uSun * uSunAmt > 0.0) {
 		vec2 sp = vWorldPos.xz - uSunRect.xy;
 		sp.x += sp.y * 0.35;
 		vec2 sq = abs(sp) - uSunRect.zw;
 		float inside = 1.0 - smoothstep(-0.12, 0.0, max(sq.x, sq.y));
 		vec2 pane = abs(fract(sp / (uSunRect.zw * vec2(1.0, 0.6667)) * 0.5 + 0.5) - 0.5);
 		float bars = smoothstep(0.02, 0.07, min(pane.x * uSunRect.z, pane.y * uSunRect.w));
-		col = mix(col, col * 0.55 + uSunColor * 0.6, inside * bars * shadow * uSun);
+		col = mix(col, col * 0.55 + uSunColor * 0.6, inside * bars * shadow * uSun * uSunAmt);
 	}
 
 	col = mix(col, mix(cDeep, uLine, 0.35), ink);
@@ -362,7 +390,13 @@ void main() {
 	#endif
 
 	// warm key / cool ambient
-	col *= mix(uAmbTint, uKeyTint, key);
+	// mood: key/ambient temperature, a colour gradient up the room, and a warm
+	// practical lamp that takes over from the mood where its light reaches
+	vec3 tint = mix(uAmbTint, uKeyTint, key) * mix(uFloorTint, uSkyTint, smoothstep(0.0, 3.1, vWorldPos.y));
+	float lamp = 1.0 - smoothstep(0.0, uLampRadius, length(vWorldPos - uLampPos));
+	lamp *= lamp * uLampAmt;
+	tint = mix(tint, uLampColor * 1.25, min(lamp * 1.35, 1.0));
+	col *= tint;
 
 	// atmosphere
 	float fogT = smoothstep(uFogNear, uFogFar, -vViewPos.z);
@@ -401,13 +435,14 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uCelAt: {value: o.celAt ?? 0},
 			uSpec: {value: o.spec ?? 0},
 			uShine: {value: o.shine ?? 30},
+			uBounce: {value: o.bounce ?? 0},
 			uGround: {value: o.ground ?? 0},
 			uYRange: {value: new Vector2(...(o.yRange ?? [0, 1]))},
 			uPivot: {value: new Vector3(...(o.pivot ?? [0, 0, 0]))},
 			uRadius: {value: o.radius ?? 1},
 			uPatScale: {value: o.patScale ?? 1},
 			uFogAmt: {value: o.fog ?? 0.35},
-			uDepthBias: {value: o.depthBias ?? 0},
+			uDepthBias: o.depthBiasRef ?? {value: o.depthBias ?? 0},
 			uEyes: {value: new Vector4(0, 0, 0, 0)},
 			uLook: {value: new Vector2(0, 0)},
 			uBrow: {value: new Vector4(0, 0, 0, 0)},
@@ -471,6 +506,7 @@ uniform vec3 uLine;
 uniform vec3 uLineLit;
 uniform vec3 uColor;
 uniform float uTint;
+uniform vec3 uAmbTint;
 uniform vec3 uFogColor;
 uniform float uFogNear;
 uniform float uFogFar;
@@ -483,6 +519,7 @@ void main() {
 	// ink picks up a little of the local colour and warms where light hits it
 	vec3 col = mix(uLine, uLineLit, vLit * 0.7);
 	col = mix(col, uColor, uTint * (0.35 + 0.65 * vLit));
+	col *= mix(vec3(1.0), uAmbTint, 0.6);
 	float fogT = smoothstep(uFogNear, uFogFar, vDepth);
 	col = mix(col, uFogColor, fogT * uFogAmt);
 	gl_FragColor = vec4(col, 1.0);
@@ -497,6 +534,7 @@ export type OutlineOptions = {
 	box?: boolean;
 	seed?: number;
 	depthBias?: number;
+	depthBiasRef?: {value: number};
 	/** Blend the ink toward this colour (coloured line art for soft props). */
 	color?: Color;
 	tint?: number;
@@ -513,7 +551,7 @@ export const outline = (o: OutlineOptions = {}): ShaderMaterial =>
 			uThick: {value: o.thick ?? 1.5},
 			uBox: {value: o.box ? 1 : 0},
 			uSeed: {value: o.seed ?? 0},
-			uDepthBias: {value: o.depthBias ?? 0},
+			uDepthBias: o.depthBiasRef ?? {value: o.depthBias ?? 0},
 			uColor: {value: o.color ?? new Color(0, 0, 0)},
 			uTint: {value: o.color ? (o.tint ?? 0.3) : 0},
 			uFogAmt: {value: o.fog ?? 0.55},

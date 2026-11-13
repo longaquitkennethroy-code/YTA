@@ -7,9 +7,8 @@ import {P} from '../toon/palette';
 import {Room} from './Room';
 import {Stickman} from './Stickman';
 import {cameraAt, civilianPose, officerPose} from './acting';
+import {moodAt} from './moods';
 
-// Key light: high and from the front-right of the room.
-const LIGHT_POS = new Vector3(4.5, 8.5, 5.5);
 const LIGHT_TARGET = new Vector3(0, 0, -1);
 
 export const Scene: React.FC = () => {
@@ -26,11 +25,25 @@ export const Scene: React.FC = () => {
 	camera.updateProjectionMatrix();
 	camera.updateMatrixWorld();
 
+	// the mood drives every material through the shared uniforms
+	const mood = moodAt(frame);
+	const LIGHT_POS = new Vector3(...mood.light);
 	globals.uLightDirW.value.copy(LIGHT_POS).sub(LIGHT_TARGET).normalize();
+	globals.uKeyTint.value.copy(mood.key);
+	globals.uAmbTint.value.copy(mood.amb);
+	globals.uFogColor.value.copy(mood.fog);
+	globals.uFloorTint.value.copy(mood.floor);
+	globals.uSkyTint.value.copy(mood.sky);
+	globals.uSunColor.value.copy(mood.sun);
+	globals.uSunAmt.value = mood.sunAmt;
+	globals.uLampAmt.value = mood.lamp;
+	P.glass.base.copy(mood.glass.base);
+	P.glass.shade.copy(mood.glass.shade);
+	P.glass.deep.copy(mood.glass.deep);
 
 	return (
 		<>
-			<color attach="background" args={[P.fog]} />
+			<color attach="background" args={[mood.fog]} />
 			<ambientLight intensity={1} />
 			<directionalLight
 				position={LIGHT_POS}
