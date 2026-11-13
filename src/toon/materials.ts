@@ -38,6 +38,15 @@ export const globals = {
 	uLampColor: {value: new Color(1, 0.8, 0.5)},
 	uLampAmt: {value: 0},
 	uLampRadius: {value: 4.2},
+	/**
+	 * When 1, shaders write their true distance from the camera into alpha.
+	 * Depth of field reads that, so parts that are pulled forward in the depth
+	 * buffer (the head, the hat) still focus at their real distance.
+	 */
+	uDepthOut: {value: 0},
+	/** A light that only characters receive, so they stay readable in dark scenes. */
+	uFigureTint: {value: new Color(1, 1, 1)},
+	uFigureAmt: {value: 0},
 };
 
 const PATTERNS = {none: 0, wood: 1, checker: 2, wallpaper: 3, uniform: 4, face: 5, carpet: 6} as const;
@@ -95,6 +104,8 @@ export type ToonOptions = {
 	paper?: {center: [number, number]; half: [number, number]; roundY: number};
 	/** Which drawn view of the part is showing (shared, radians). */
 	viewYaw?: {value: number};
+	/** Characters and what they hold: these receive the mood's figure light. */
+	figure?: boolean;
 	/** How strongly the window light patch shows on this surface (floors). */
 	sun?: number;
 };
@@ -184,6 +195,10 @@ uniform vec3 uLampPos;
 uniform vec3 uLampColor;
 uniform float uLampAmt;
 uniform float uLampRadius;
+uniform float uDepthOut;
+uniform vec3 uFigureTint;
+uniform float uFigureAmt;
+uniform float uFigure;
 uniform float uGround;
 uniform vec2 uYRange;
 uniform float uPatScale;
@@ -450,6 +465,8 @@ void main() {
 	float lamp = 1.0 - smoothstep(0.0, uLampRadius, length(vWorldPos - uLampPos));
 	lamp *= lamp * uLampAmt;
 	tint = mix(tint, uLampColor * 1.25, min(lamp * 1.35, 1.0));
+	// figure light: lifts characters out of a dark room, strongest on the lit side
+	tint = mix(tint, max(tint, uFigureTint * mix(0.72, 1.0, key)), uFigure * uFigureAmt);
 	col *= tint;
 
 	// atmosphere
@@ -458,6 +475,7 @@ void main() {
 
 	gl_FragColor = vec4(col, 1.0);
 	#include <colorspace_fragment>
+	gl_FragColor.a = mix(1.0, -vViewPos.z, uDepthOut);
 }
 `;
 
@@ -492,6 +510,7 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uStripe: {value: new Vector3(o.stripe?.inset ?? 0.42, o.stripe?.width ?? 0.085, o.stripe?.arc ?? (o.stripe?.y ? 0.2 : 0.86))},
 			uStripeY: {value: new Vector2(...(o.stripe?.y ?? [0, 0]))},
 			uBounce: {value: o.bounce ?? 0},
+			uFigure: {value: o.figure ? 1 : 0},
 			uGround: {value: o.ground ?? 0},
 			uYRange: {value: new Vector2(...(o.yRange ?? [0, 1]))},
 			uPivot: {value: new Vector3(...(o.pivot ?? [0, 0, 0]))},
@@ -567,6 +586,7 @@ uniform vec3 uLineLit;
 uniform vec3 uColor;
 uniform float uTint;
 uniform vec3 uAmbTint;
+uniform float uDepthOut;
 uniform vec3 uFogColor;
 uniform float uFogNear;
 uniform float uFogFar;
@@ -584,6 +604,7 @@ void main() {
 	col = mix(col, uFogColor, fogT * uFogAmt);
 	gl_FragColor = vec4(col, 1.0);
 	#include <colorspace_fragment>
+	gl_FragColor.a = mix(1.0, vDepth, uDepthOut);
 }
 `;
 

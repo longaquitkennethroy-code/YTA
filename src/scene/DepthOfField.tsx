@@ -12,6 +12,7 @@ import {
 	Vector3,
 	WebGLRenderTarget,
 } from 'three';
+import {globals} from '../toon/materials';
 
 const fragment = /* glsl */ `
 uniform sampler2D tColor;
@@ -22,12 +23,16 @@ uniform float uFocus;
 uniform float uMaxBlur;
 uniform float uAspect;
 uniform float uStrength;
+uniform float uGlow;
+uniform float uGlowSize;
 varying vec2 vUv;
 
-// distance in front of the camera, in metres
+// Distance in front of the camera, in metres. Shaders write it into alpha;
+// where nothing was drawn (alpha is the clear value) fall back to far away.
 float viewZ(vec2 uv) {
-	float z = texture2D(tDepth, uv).x * 2.0 - 1.0;
-	return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear));
+	float a = texture2D(tColor, uv).a;
+	float raw = texture2D(tDepth, uv).x;
+	return raw > 0.99999 ? uFar : a;
 }
 // Blur size, 0..1. Like a real lens it grows fast in front of the focus
 // distance and levels off behind it; a small band around focus stays sharp.
@@ -57,7 +62,22 @@ void main() {
 		acc += texture2D(tColor, uv).rgb * w;
 		total += w;
 	}
-	gl_FragColor = vec4(acc / total, 1.0);
+	vec3 col = acc / total;
+
+	// Soft glow: a wide, gentle blur of the picture screened back over itself,
+	// so bright areas bloom a little and edges lose their digital hardness.
+	vec3 halo = vec3(0.0);
+	for (int i = 0; i < 20; i++) {
+		float fi = float(i) + 0.5;
+		float r = sqrt(fi / 20.0);
+		float th = fi * 2.39996323 + 1.3;
+		halo += texture2D(tColor, vUv + vec2(cos(th) / uAspect, sin(th)) * r * uGlowSize).rgb;
+	}
+	halo /= 20.0;
+	halo *= smoothstep(0.25, 0.95, max(halo.r, max(halo.g, halo.b)));
+	col = col + halo * uGlow * (1.0 - col * 0.6);
+
+	gl_FragColor = vec4(col, 1.0);
 	#include <colorspace_fragment>
 }
 `;
@@ -68,7 +88,7 @@ type V3 = [number, number, number];
  * Depth of field. The scene is drawn into an off-screen buffer with its
  * depth, then blurred by how far each pixel is from the focus point.
  */
-export const DepthOfField: React.FC<{focus: V3; strength?: number; maxBlur?: number}> = ({focus, strength = 1, maxBlur = 0.0095}) => {
+export const DepthOfField: React.FC<{focus: V3; strength?: number; maxBlur?: number; glow?: number}> = ({focus, strength = 1, maxBlur = 0.0095, glow = 0.3}) => {
 	const gl = useThree((s) => s.gl);
 	const scene = useThree((s) => s.scene);
 	const camera = useThree((s) => s.camera) as PerspectiveCamera;
@@ -92,6 +112,8 @@ export const DepthOfField: React.FC<{focus: V3; strength?: number; maxBlur?: num
 				uMaxBlur: {value: maxBlur},
 				uAspect: {value: w / h},
 				uStrength: {value: strength},
+				uGlow: {value: glow},
+				uGlowSize: {value: 0.03},
 			},
 			vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
 			fragmentShader: fragment,
@@ -112,14 +134,17 @@ export const DepthOfField: React.FC<{focus: V3; strength?: number; maxBlur?: num
 	const u = post.material.uniforms;
 	u.uFocus.value = Math.max(0.2, -new Vector3(...focus).applyMatrix4(camera.matrixWorldInverse).z);
 	u.uStrength.value = strength;
+	u.uGlow.value = glow;
 	u.uNear.value = camera.near;
 	u.uFar.value = camera.far;
 
 	// Taking a render priority hands the frame to us instead of the default render.
 	useFrame(() => {
+		globals.uDepthOut.value = 1;
 		gl.setRenderTarget(post.target);
 		gl.render(scene, camera);
 		gl.setRenderTarget(null);
+		globals.uDepthOut.value = 0;
 		gl.render(post.quad, post.cam);
 	}, 1);
 

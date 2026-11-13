@@ -105,13 +105,13 @@ const Window: React.FC<{position: V3; size: [number, number]; rotation?: V3}> = 
 	</group>
 );
 
-export const Room: React.FC = () => (
+export const Room: React.FC<{ceiling?: boolean}> = ({ceiling = true}) => (
 	<group>
 		{/* ---------------- living room: x -3..3, z -3..4.5 ---------------- */}
 		<Box size={[6.4, 0.1, 7.8]} position={[0, -0.05, 0.75]} material={M.wood} cast={false} receive line={false} />
 		<Box size={[3.5, 0.02, 3.9]} position={[0.25, 0.01, 1.1]} material={M.rugBorder} cast={false} receive />
 		<Box size={[3.1, 0.02, 3.5]} position={[0.25, 0.018, 1.1]} material={M.rug} cast={false} receive line={boxLineThin} />
-		<Box size={[6.4, 0.1, 7.8]} position={[0, H + 0.05, 0.75]} material={M.ceiling} cast={false} line={false} />
+		{ceiling ? <Box size={[6.4, 0.1, 7.8]} position={[0, H + 0.05, 0.75]} material={M.ceiling} cast={false} line={false} /> : null}
 
 		{/* back wall with the wide opening to the kitchen (x -2.4..0.1) */}
 		<Wall size={[0.8, H, 0.2]} position={[-2.8, 0, -3.1]} />
@@ -222,7 +222,7 @@ export const Room: React.FC = () => (
 
 		{/* ---------------- kitchen: x -4.2..1.2, z -7.2..-3.2 -------------- */}
 		<Box size={[5.8, 0.1, 4.2]} position={[-1.5, -0.05, -5.3]} material={M.tiles} cast={false} receive line={false} />
-		<Box size={[5.8, 0.1, 4.2]} position={[-1.5, H + 0.05, -5.3]} material={M.ceiling} cast={false} line={false} />
+		{ceiling ? <Box size={[5.8, 0.1, 4.2]} position={[-1.5, H + 0.05, -5.3]} material={M.ceiling} cast={false} line={false} /> : null}
 		<Wall size={[5.8, H, 0.2]} position={[-1.5, 0, -7.3]} paper={M.kWall} upper={M.kWall} rail={false} />
 		<Wall size={[0.2, H, 4.2]} position={[-4.3, 0, -5.3]} paper={M.kWall} upper={M.kWall} rail={false} />
 		<Wall size={[0.2, H, 4.2]} position={[1.3, 0, -5.3]} paper={M.kWall} upper={M.kWall} rail={false} />

@@ -21,6 +21,10 @@ import {
 import {Box, Ink, boxLineThin} from '../toon/Ink';
 import {outline, toon} from '../toon/materials';
 import {P} from '../toon/palette';
+import {keepAway, pushOut} from './colliders';
+import {Headwear, Mug, makeWear} from './Accessories2D';
+import {CHAR, HEAD_R} from './charStyle';
+import {globals} from '../toon/materials';
 
 type V3 = [number, number, number];
 
@@ -63,12 +67,14 @@ export type Pose = {
 	footL: V3;
 	footR: V3;
 	face: Face;
+	/** Sitting on furniture: the hips may rest on it instead of being pushed clear. */
+	seated?: boolean;
 };
 
 // ---- proportions -----------------------------------------------------------
 export const HIP_Y = 0.74;
 export const BODY_H = 0.82;
-export const HEAD_R = 0.34;
+export {CHAR, HEAD_R} from './charStyle';
 export const LIMB_R = 0.03;
 export const ARM = 0.37;
 export const LEG = 0.385;
@@ -90,22 +96,7 @@ export const bodyGeo = (() => {
 })();
 export const headGeo = new SphereGeometry(HEAD_R, 48, 32);
 const jointGeo = new SphereGeometry(LIMB_R, 12, 8);
-const unitSphere = new SphereGeometry(1, 32, 20);
 
-const crownGeo = new LatheGeometry(
-	[
-		[0.262, 0],
-		[0.268, 0.07],
-		[0.3, 0.13],
-		[0.36, 0.2],
-		[0.375, 0.235],
-		[0.35, 0.265],
-		[0.22, 0.285],
-		[0.0001, 0.29],
-	].map(([x, y]) => new Vector2(x, y)),
-	40,
-);
-const bandGeo = new CylinderGeometry(0.274, 0.268, 0.07, 40, 1, true);
 const beltGeo = new CylinderGeometry(0.207, 0.21, 0.075, 40, 1, true);
 export const starGeo = (() => {
 	const s = new Shape();
@@ -120,14 +111,8 @@ export const starGeo = (() => {
 	g.translate(0, 0, -0.125);
 	return g;
 })();
-const hairGeo = new SphereGeometry(HEAD_R * 1.05, 40, 16, 0, Math.PI * 2, 0, 1.05);
-const tuftGeo = new ConeGeometry(0.07, 0.24, 16, 1, true);
-const mugGeo = new CylinderGeometry(0.055, 0.05, 0.11, 20);
 
 // ---- materials -------------------------------------------------------------
-// flat ~0.8: the lighting normal is 80% "a sheet of paper facing the camera".
-export // celSoft: shadows on characters fade in as a gradient instead of a hard edge
-const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25, celSoft: 0.2};
 
 // The whole head (and what it wears) is drawn in front of the torso, so the
 // head keeps a complete outline where it overlaps the body.
@@ -135,24 +120,19 @@ const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25
 const BIAS = {officer: {value: 0.24}, civilian: {value: 0.24}};
 const HEAD = {depthBiasRef: BIAS.officer};
 const HEAD_CIV = {depthBiasRef: BIAS.civilian};
+// Flat accessories sit in front of the round head: pulled a head's radius further.
+const WEAR_BIAS = {officer: {value: 0.6}, civilian: {value: 0.6}};
+const HELD_BIAS = {value: 0.1};
+const wears = {officer: makeWear(WEAR_BIAS.officer), civilian: makeWear(WEAR_BIAS.civilian)};
+const held = makeWear(HELD_BIAS);
 
-export const limbMat = toon({ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
+export const limbMat = toon({figure: true, ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
 const starMat = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2});
 const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
-const starMatHead = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2, ...HEAD});
-const inkMatHead = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4, ...HEAD});
-const visorMat = toon({ramp: P.visor, ...CHAR, ...HEAD, spec: 1, rim: 0.7, rimWidth: 0.55, radius: 0.3});
-const bandMat = toon({ramp: P.uniformDark, ...CHAR, ...HEAD, radius: 0.3});
-const mugMat = toon({ramp: P.mug, ...CHAR, cel: 0.8, spec: 0.8, radius: 0.08});
 const charLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3});
-const propLine = outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1});
 const headLines = {
 	officer: outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3, ...HEAD}),
 	civilian: outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3, ...HEAD_CIV}),
-};
-const headPropLines = {
-	officer: outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1, ...HEAD}),
-	civilian: outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1, ...HEAD_CIV}),
 };
 
 const makeHeadMat = (variant: Variant) =>
@@ -177,8 +157,6 @@ const makeBodyMat = (variant: Variant) =>
 		radius: BODY_H / 2,
 		pattern: variant === 'officer' ? 'uniform' : 'none',
 	});
-const hatMat = toon({ramp: P.uniform, ...CHAR, ...HEAD, bounce: 0.7, edge: 0.5, cel: 0.9, celAt: 0.15, spec: 1, stripe: {y: [0.1, 0.27], inset: 0.38}, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
-const hairMat = toon({ramp: P.hair, ...CHAR, ...HEAD_CIV, bounce: 0.6, cel: 0.85, celAt: 0.15, spec: 0.7, rim: 0.6, rimWidth: 0.35, radius: 0.36});
 
 // ---- limbs -----------------------------------------------------------------
 export const v = (a: V3) => new Vector3(a[0], a[1], a[2]);
@@ -231,10 +209,10 @@ export const armsOf = (pose: Pose) => {
 // ---- character -------------------------------------------------------------
 export type Variant = 'officer' | 'civilian';
 
-const Star: React.FC<{position: V3; rotation?: V3; size: number; head?: boolean}> = ({position, rotation, size, head}) => (
+const Star: React.FC<{position: V3; rotation?: V3; size: number}> = ({position, rotation, size}) => (
 	<group position={position} rotation={rotation}>
-		<mesh geometry={starGeo} material={head ? starMatHead : starMat} scale={[size, size, size * 0.3]} />
-		<mesh geometry={starGeo} material={head ? inkMatHead : inkMat} scale={[size * 1.32, size * 1.32, size * 0.2]} position={[0, 0, -size * 0.03]} />
+		<mesh geometry={starGeo} material={starMat} scale={[size, size, size * 0.3]} />
+		<mesh geometry={starGeo} material={inkMat} scale={[size * 1.32, size * 1.32, size * 0.2]} position={[0, 0, -size * 0.03]} />
 	</group>
 );
 
@@ -242,26 +220,11 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 	const camera = useThree((s) => s.camera);
 	const headMat = useMemo(() => makeHeadMat(variant), [variant]);
 	const headLine = headLines[variant];
-	const headPropLine = headPropLines[variant];
 	const bodyMat = useMemo(() => makeBodyMat(variant), [variant]);
 
-	const bodyQ = new Quaternion().setFromEuler(new Euler(pose.lean[0], pose.twist, -pose.lean[1], 'YXZ'));
-	const hip = new Vector3(0, HIP_Y + pose.bob, 0);
-	const sy = 1 + pose.stretch;
-	const sx = 1 / Math.sqrt(sy);
-	const hy = 1 + pose.headStretch;
-	const hx = 1 / Math.sqrt(hy);
-	const onBody = (x: number, y: number, z: number) => new Vector3(x * sx, y * sy, z * sx).applyQuaternion(bodyQ).add(hip);
+	const {hip, bodyQ, onBody, headPos, armL, armR, legL, legR, sx, sy, hx, hy} = rigOf(pose);
 	const bodyEuler = new Euler().setFromQuaternion(bodyQ);
-
-	const headPos = onBody(0, BODY_H, 0).add(new Vector3(0, 0.2, 0)).add(v(pose.headOffset));
 	const headQ = new Quaternion().setFromEuler(new Euler(pose.headPitch, pose.headYaw, pose.headRoll, 'YXZ'));
-
-	const armL = solve(onBody(0.135, 0.63, 0), v(pose.handL), ARM, v(pose.elbowL));
-	const armR = solve(onBody(-0.135, 0.63, 0), v(pose.handR), ARM, v(pose.elbowR));
-	const fwd = new Vector3(0, 0.15, 1);
-	const legL = solve(onBody(0.085, 0.05, 0), v(pose.footL), LEG, fwd);
-	const legR = solve(onBody(-0.085, 0.05, 0), v(pose.footR), LEG, fwd);
 
 	// the face is ink in the head shader, so expressions are just uniforms
 	const u = (headMat as ShaderMaterial).uniforms;
@@ -302,6 +265,19 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 	const dragZ = clampTo((pose.yaw + pose.headYaw - past.yaw - past.headYaw) * 0.55 + (pose.headRoll - past.headRoll) * 1.5, 0.3);
 	const dragX = clampTo((pose.bob + pose.headOffset[1] - past.bob - past.headOffset[1]) * 5 - (pose.headPitch - past.headPitch) * 1.5, 0.3);
 
+	// The plane that worn and held things are drawn on: it faces the camera.
+	const headWorld = headPos.clone().applyAxisAngle(new Vector3(0, 1, 0), pose.yaw).add(v(pose.pos));
+	const seen = camera.position.clone().sub(headWorld);
+	const planeQ = new Quaternion().setFromRotationMatrix(new Matrix4().lookAt(seen, new Vector3(), new Vector3(0, 1, 0)));
+	const planeLocal = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -pose.yaw).multiply(planeQ);
+	const view = Math.atan2(seen.x, seen.z) - pose.yaw - pose.headYaw;
+	const facing = Math.cos(view);
+	const sideways = -Math.sin(view);
+	const l3 = globals.uLightDirW.value.clone().applyQuaternion(planeQ.clone().invert());
+	const ll = Math.hypot(l3.x, l3.y) || 1;
+	const light: [number, number] = [l3.x / ll, l3.y / ll];
+	WEAR_BIAS[variant].value = BIAS[variant].value + HEAD_R + 0.08;
+
 	return (
 		<group position={pose.pos} rotation={[0, pose.yaw, 0]}>
 			<Limb pts={legL} />
@@ -329,43 +305,29 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 
 			<group position={headPos} quaternion={headQ} scale={[hx, hy, hx]}>
 				<Ink geometry={headGeo} material={headMat} line={headLine} />
-				{variant === 'officer' ? (
-					<group position={[0, 0.2, -0.01]} rotation={[-0.1 + dragX, 0, 0.03 + dragZ]}>
-						<Ink geometry={crownGeo} material={hatMat} line={headLine} />
-						<mesh geometry={bandGeo} material={bandMat} position={[0, 0.036, 0]} />
-						<Ink
-							geometry={unitSphere}
-							material={visorMat}
-							line={headPropLine}
-							position={[0, 0.0, 0.2]}
-							rotation={[0.3, 0, 0]}
-							scale={[0.3, 0.028, 0.24]}
-						/>
-						<Star position={[0, 0.165, 0.338]} rotation={[-0.42, 0, 0]} size={0.062} head />
-					</group>
-				) : (
-					<group rotation={[-0.42 + dragX, 0, 0.05 + dragZ]}>
-						<Ink geometry={hairGeo} material={hairMat} line={headLine} />
-						<Ink geometry={tuftGeo} material={hairMat} line={headPropLine} position={[0.05, 0.39, 0.13]} rotation={[0.55, 0, -0.35]} />
-						<Ink geometry={tuftGeo} material={hairMat} line={headPropLine} position={[-0.08, 0.4, 0.08]} rotation={[0.3, 0, 0.4]} />
-						<Ink geometry={tuftGeo} material={hairMat} line={headPropLine} position={[0.0, 0.41, -0.02]} rotation={[-0.15, 0, 0.02]} scale={0.9} />
-					</group>
-				)}
 			</group>
 
+			{/* worn and held things are flat drawings on a plane that faces the camera */}
+			<group position={headPos} quaternion={planeLocal}>
+				<group rotation={[0, 0, pose.headRoll * facing]} scale={[hx, hy, 1]}>
+					<Headwear variant={variant} wear={wears[variant]} facing={facing} sideways={sideways} drag={dragZ} light={light} />
+				</group>
+			</group>
 			{variant === 'civilian' ? (
-				<Ink
-					geometry={mugGeo}
-					material={mugMat}
-					line={propLine}
-					position={[pose.handR[0], pose.handR[1] + 0.03, pose.handR[2] + 0.03]}
-				/>
+				<group position={armR[2]} quaternion={planeLocal}>
+					<Mug wear={held} light={light} />
+				</group>
 			) : null}
 		</group>
 	);
 };
 
-/** The skeleton for a pose, in character space. Shared with the 2D cut-out renderer. */
+/**
+ * The skeleton for a pose, in character space. Shared by the 3D and 2D
+ * renderers. Nothing is allowed to pass through anything: hands and elbows are
+ * kept outside the character's own torso and head, and every joint is kept out
+ * of the furniture and walls.
+ */
 export const rigOf = (pose: Pose) => {
 	const bodyQ = new Quaternion().setFromEuler(new Euler(pose.lean[0], pose.twist, -pose.lean[1], 'YXZ'));
 	const hip = new Vector3(0, HIP_Y + pose.bob, 0);
@@ -374,16 +336,46 @@ export const rigOf = (pose: Pose) => {
 	const hy = 1 + pose.headStretch;
 	const hx = 1 / Math.sqrt(hy);
 	const onBody = (x: number, y: number, z: number) => new Vector3(x * sx, y * sy, z * sx).applyQuaternion(bodyQ).add(hip);
+	const top = onBody(0, BODY_H, 0);
+
+	// character space <-> the room
+	const up = new Vector3(0, 1, 0);
+	const origin = v(pose.pos);
+	const toRoom = (p: Vector3) => p.clone().applyAxisAngle(up, pose.yaw).add(origin);
+	const toSelf = (p: Vector3) => p.clone().sub(origin).applyAxisAngle(up, -pose.yaw);
+	const clearOfSet = (p: Vector3, r: number) => toSelf(pushOut(toRoom(p), r));
+
+	const headPos = clearOfSet(top.clone().add(new Vector3(0, 0.2, 0)).add(v(pose.headOffset)), HEAD_R + 0.03);
+
+	// a point kept outside this character's own torso (a capsule) and head (a ball)
+	const axis = top.clone().sub(hip);
+	const clearOfSelf = (p: Vector3, r: number) => {
+		const t = Math.min(1, Math.max(0, p.clone().sub(hip).dot(axis) / axis.lengthSq()));
+		const onAxis = hip.clone().addScaledVector(axis, t);
+		return keepAway(keepAway(p, onAxis, 0.205 * sx + r), headPos, HEAD_R * hx + r);
+	};
+	const arm = (shoulder: Vector3, hand: V3, pole: V3) => {
+		const target = clearOfSet(clearOfSelf(v(hand), LIMB_R + 0.01), LIMB_R);
+		const pts = solve(shoulder, target, ARM, v(pole));
+		pts[1] = clearOfSet(clearOfSelf(pts[1], LIMB_R), LIMB_R);
+		return pts;
+	};
 	const fwd = new Vector3(0, 0.15, 1);
+	const leg = (hipJoint: Vector3, foot: V3) => {
+		const pts = solve(hipJoint, clearOfSet(v(foot), LIMB_R), LEG, fwd);
+		pts[1] = clearOfSet(pts[1], LIMB_R + 0.01);
+		return pts;
+	};
 	return {
 		hip,
 		bodyQ,
-		top: onBody(0, BODY_H, 0),
-		headPos: onBody(0, BODY_H, 0).add(new Vector3(0, 0.2, 0)).add(v(pose.headOffset)),
-		armL: solve(onBody(0.135, 0.63, 0), v(pose.handL), ARM, v(pose.elbowL)),
-		armR: solve(onBody(-0.135, 0.63, 0), v(pose.handR), ARM, v(pose.elbowR)),
-		legL: solve(onBody(0.085, 0.05, 0), v(pose.footL), LEG, fwd),
-		legR: solve(onBody(-0.085, 0.05, 0), v(pose.footR), LEG, fwd),
+		onBody,
+		top,
+		headPos,
+		armL: arm(onBody(0.135, 0.63, 0), pose.handL, pose.elbowL),
+		armR: arm(onBody(-0.135, 0.63, 0), pose.handR, pose.elbowR),
+		legL: leg(onBody(0.085, 0.05, 0), pose.footL),
+		legR: leg(onBody(-0.085, 0.05, 0), pose.footR),
 		sx,
 		sy,
 		hx,

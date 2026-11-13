@@ -57,8 +57,8 @@ export const SHOTS: StudyShot[] = [
 		// ref 0.0-1.9s: medium-wide, tracks sideways with a walking character
 		from: 0, to: 58, cut: 'cut', label: 'track with the walker', mood: hold(night), focus: (f) => [lerp(-1.8, 0.5, ramp(f, 0, 58)), 1.3, 3.4],
 		keys: [
-			{at: 0, pos: [-2.0, 1.5, 0.4], look: [-1.8, 1.2, 3.3], fov: 62},
-			{at: 58, pos: [0.2, 1.5, 0.9], look: [0.5, 1.2, 3.5], fov: 58},
+			{at: 0, pos: [-2.1, 1.5, -0.4], look: [-1.8, 1.1, 3.3], fov: 68},
+			{at: 58, pos: [0.1, 1.5, 0.0], look: [0.5, 1.1, 3.5], fov: 64},
 		],
 	},
 	{
@@ -132,8 +132,8 @@ export const SHOTS: StudyShot[] = [
 		// ref 25.6-30.6s: straight down, pushing and rotating, with jump cuts
 		from: 762, to: 920, cut: 'soft', label: 'straight down, with jump cuts', mood: hold(morning), focus: [SOFA_X, 1.2, 1.9], blur: 0.3,
 		keys: [
-			{at: 762, pos: [1.7, 2.98, 1.9], look: [1.72, 0, 1.9], fov: 108},
-			{at: 920, pos: [1.7, 2.9, 1.9], look: [1.72, 0, 1.9], fov: 90, roll: 0.3},
+			{at: 762, pos: [1.7, 6.2, 1.9], look: [1.72, 0, 1.9], fov: 62},
+			{at: 920, pos: [1.9, 5.2, 1.9], look: [1.92, 0, 1.9], fov: 56, roll: 0.3},
 		],
 	},
 	{
@@ -197,10 +197,10 @@ export const SHOTS: StudyShot[] = [
 	},
 	{
 		// ref 50.5-52.3s: frontal medium, then a push into what the character holds
-		from: 1515, to: 1569, cut: 'none', label: 'push in to the object', mood: hold(morning), focus: [0.68, 1.3, 1.62],
+		from: 1515, to: 1569, cut: 'none', label: 'push in to the object', mood: hold(morning), focus: [0.5, 1.34, 1.68],
 		keys: [
 			{at: 1515, pos: [-0.1, 1.45, 4.2], look: [0.5, 1.4, 1.2], fov: 50},
-			{at: 1569, pos: [0.3, 1.4, 2.9], look: [0.68, 1.3, 1.62], fov: 40},
+			{at: 1569, pos: [0.25, 1.42, 3.0], look: [0.5, 1.36, 1.68], fov: 34},
 		],
 	},
 	{
@@ -225,7 +225,8 @@ export const SHOTS: StudyShot[] = [
 		from: 1656, to: 1751, cut: 'none', label: 'pull back, then the final tableau', mood: hold(night), focus: (f) => lerp3([0.6, 1.5, 1.2], [SOFA_X, 1.2, 1.9], ease(f, 1660, 1700)),
 		keys: [
 			{at: 1656, pos: [0.05, 1.62, 3.1], look: [0.62, 1.62, 1.2], fov: 38},
-			{at: 1700, pos: [-0.9, 1.75, 2.0], look: [2.0, 0.95, 1.9], fov: 77},
+			{at: 1676, pos: [-0.6, 1.72, 3.2], look: [1.0, 1.25, 1.6], fov: 60},
+			{at: 1704, pos: [-0.9, 1.75, 2.0], look: [2.0, 0.95, 1.9], fov: 77},
 			{at: 1751, pos: [-0.6, 1.7, 2.0], look: [2.0, 0.95, 1.9], fov: 74},
 		],
 	},
@@ -307,6 +308,7 @@ const walk = (a: V3, b: V3, p: number, f: number, o: Partial<Pose> = {}): Pose =
 /** Sitting on the sofa at depth z. */
 const sit = (z: number, f: number, o: Partial<Pose> = {}, face: Partial<Face> = {}): Pose =>
 	stand([SOFA_X, 0, z], FACE_ROOM, f, {
+		seated: true,
 		bob: -0.12 + wave(f, 75) * 0.006,
 		lean: [-0.1, 0],
 		handL: [0.2, 0.74, 0.3],
@@ -365,7 +367,7 @@ const officer = (f: number): Pose | null => {
 		const show = snap(f, 1520, 1532);
 		return stand([0.5, 0, 1.2], -0.3, f, {
 			handR: lerp3([-0.25, 0.82, 0.03], [-0.5, 1.0 + wave(f, 9) * 0.03, 0.2], shake),
-			handL: lerp3([0.25, 0.82, 0.03], [0.3, 1.3, 0.35], show),
+			handL: lerp3([0.25, 0.82, 0.03], [0.14, 1.34, 0.46], show),
 			headYaw: lerp(0.5, 0, show),
 		}, {...BORED, lid: 0.3, mouth: [0.1, 0, 0.08, 0]});
 	}
@@ -376,11 +378,11 @@ const officer = (f: number): Pose | null => {
 		return stand([0.5, 0, 1.2], -0.3, f, {handL: [0.42, 1.72, 0.2], elbowL: [1, -0.6, -0.2], headRoll: 0.08 * smirk}, {lid: 0.3 + smirk * 0.25, browL: [0.07, -0.15], browR: [-0.02, 0.25], mouth: [0.1, 0, 0.14 * smirk, 0]});
 	}
 	// crosses to the sofa and flops onto it
-	if (f < 1690) return walk([0.5, 0, 1.2], [1.75, 0, 1.9], ramp(f, 1656, 1690), f);
+	if (f < 1690) return walk([0.5, 0, 1.2], [1.5, 0, 1.9], ramp(f, 1656, 1690), f);
 	const flop = snap(f, 1690, 1700);
 	const settle = pulse(f, 1699, 4);
 	return sit(1.9, f, {
-		pos: [lerp(1.75, SOFA_X, flop), 0, 1.9],
+		pos: [lerp(1.5, SOFA_X, flop), 0, 1.9],
 		yaw: lerp(1.06, FACE_ROOM, flop),
 		bob: lerp(0, -0.12, flop) - settle * 0.05,
 		stretch: -settle * 0.12,
@@ -450,4 +452,5 @@ export const studyDirection: Direction = {
 	blur: (f) => shotAt(f).blur ?? 1,
 	officer,
 	civilian,
+	openTop: (f) => f >= 762 && f < 920,
 };
