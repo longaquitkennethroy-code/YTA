@@ -67,6 +67,8 @@ export type ToonOptions = {
 	patScale?: number;
 	fog?: number;
 	doubleSide?: boolean;
+	/** Metres to pull toward the camera in depth only. */
+	depthBias?: number;
 	/** How strongly the window light patch shows on this surface (floors). */
 	sun?: number;
 };
@@ -77,6 +79,7 @@ const toonVertex = /* glsl */ `
 
 uniform vec3 uPivot;
 uniform float uRadius;
+uniform float uDepthBias;
 
 varying vec3 vViewPos;
 varying vec3 vNormalV;
@@ -91,6 +94,13 @@ void main() {
 	#include <project_vertex>
 	#include <worldpos_vertex>
 	#include <shadowmap_vertex>
+	// Pull this surface toward the camera in depth only (it does not move on
+	// screen), so it draws over things it overlaps. Used to keep the head's
+	// full circle of line art in front of the body.
+	if (uDepthBias != 0.0) {
+		vec4 nearer = projectionMatrix * (mvPosition + vec4(0.0, 0.0, uDepthBias, 0.0));
+		gl_Position.z = nearer.z / nearer.w * gl_Position.w;
+	}
 
 	vViewPos = mvPosition.xyz;
 	vNormalV = normalize(transformedNormal);
@@ -397,6 +407,7 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uRadius: {value: o.radius ?? 1},
 			uPatScale: {value: o.patScale ?? 1},
 			uFogAmt: {value: o.fog ?? 0.35},
+			uDepthBias: {value: o.depthBias ?? 0},
 			uEyes: {value: new Vector4(0, 0, 0, 0)},
 			uLook: {value: new Vector2(0, 0)},
 			uBrow: {value: new Vector4(0, 0, 0, 0)},
@@ -417,6 +428,7 @@ uniform float uThin;
 uniform float uThick;
 uniform float uBox;
 uniform float uSeed;
+uniform float uDepthBias;
 
 varying float vLit;
 varying float vDepth;
@@ -444,6 +456,13 @@ void main() {
 	mv.xyz += off * w;
 	vDepth = -mv.z;
 	gl_Position = projectionMatrix * mv;
+	// Pull this surface toward the camera in depth only (it does not move on
+	// screen), so it draws over things it overlaps. Used to keep the head's
+	// full circle of line art in front of the body.
+	if (uDepthBias != 0.0) {
+		vec4 nearer = projectionMatrix * (mv + vec4(0.0, 0.0, uDepthBias, 0.0));
+		gl_Position.z = nearer.z / nearer.w * gl_Position.w;
+	}
 }
 `;
 
@@ -477,6 +496,7 @@ export type OutlineOptions = {
 	thick?: number;
 	box?: boolean;
 	seed?: number;
+	depthBias?: number;
 	/** Blend the ink toward this colour (coloured line art for soft props). */
 	color?: Color;
 	tint?: number;
@@ -493,6 +513,7 @@ export const outline = (o: OutlineOptions = {}): ShaderMaterial =>
 			uThick: {value: o.thick ?? 1.5},
 			uBox: {value: o.box ? 1 : 0},
 			uSeed: {value: o.seed ?? 0},
+			uDepthBias: {value: o.depthBias ?? 0},
 			uColor: {value: o.color ?? new Color(0, 0, 0)},
 			uTint: {value: o.color ? (o.tint ?? 0.3) : 0},
 			uFogAmt: {value: o.fog ?? 0.55},

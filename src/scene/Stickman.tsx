@@ -125,17 +125,25 @@ const mugGeo = new CylinderGeometry(0.055, 0.05, 0.11, 20);
 // flat ~0.8: the lighting normal is 80% "a sheet of paper facing the camera".
 const CHAR = {flat: 0.8, grad: 0.3, band: 0.5, soft: 0.16, deep: 0.85, fog: 0.25};
 
+// The whole head (and what it wears) is drawn in front of the torso, so the
+// head keeps a complete outline where it overlaps the body.
+const HEAD = {depthBias: 0.24};
+
 const limbMat = toon({ramp: P.limb, flat: 0.9, grad: 0.2, band: 0.62, soft: 0.2, deep: 0.5, rim: 0.28, rimWidth: 0.3, fog: 0.4});
 const starMat = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2});
 const inkMat = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4});
-const visorMat = toon({ramp: P.visor, ...CHAR, spec: 1, shine: 50, rim: 0.7, rimWidth: 0.55, radius: 0.3});
-const bandMat = toon({ramp: P.uniformDark, ...CHAR, radius: 0.3});
+const starMatHead = toon({ramp: P.gold, flat: 0.85, grad: 0.25, band: 0.5, soft: 0.2, deep: 0.3, radius: 0.1, fog: 0.2, ...HEAD});
+const inkMatHead = toon({ramp: P.limb, flat: 1, grad: 0, deep: 0, fog: 0.4, ...HEAD});
+const visorMat = toon({ramp: P.visor, ...CHAR, ...HEAD, spec: 1, shine: 50, rim: 0.7, rimWidth: 0.55, radius: 0.3});
+const bandMat = toon({ramp: P.uniformDark, ...CHAR, ...HEAD, radius: 0.3});
 const mugMat = toon({ramp: P.mug, ...CHAR, cel: 0.8, spec: 0.8, shine: 20, radius: 0.08});
 const charLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3});
 const propLine = outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1});
+const headLine = outline({width: 0.021, thin: 0.5, thick: 1.6, seed: 1.3, ...HEAD});
+const headPropLine = outline({width: 0.012, thin: 0.5, thick: 1.5, seed: 4.1, ...HEAD});
 
 const makeHeadMat = () =>
-	toon({ramp: P.skin, ...CHAR, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.9, celAt: 0.05, radius: HEAD_R, pattern: 'face'});
+	toon({ramp: P.skin, ...CHAR, ...HEAD, band: 0.44, soft: 0.2, deep: 0.5, rim: 0.9, rimWidth: 0.2, cel: 0.9, celAt: 0.05, radius: HEAD_R, pattern: 'face'});
 const makeBodyMat = (variant: Variant) =>
 	toon({
 		ramp: variant === 'officer' ? P.uniform : P.shirt,
@@ -155,8 +163,8 @@ const makeBodyMat = (variant: Variant) =>
 		radius: BODY_H / 2,
 		pattern: variant === 'officer' ? 'uniform' : 'none',
 	});
-const hatMat = toon({ramp: P.uniform, ...CHAR, edge: 0.5, cel: 0.9, celAt: 0.15, spec: 1, shine: 22, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
-const hairMat = toon({ramp: P.hair, ...CHAR, cel: 0.85, celAt: 0.15, spec: 0.7, shine: 18, rim: 0.6, rimWidth: 0.35, radius: 0.36});
+const hatMat = toon({ramp: P.uniform, ...CHAR, ...HEAD, edge: 0.5, cel: 0.9, celAt: 0.15, spec: 1, shine: 22, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
+const hairMat = toon({ramp: P.hair, ...CHAR, ...HEAD, cel: 0.85, celAt: 0.15, spec: 0.7, shine: 18, rim: 0.6, rimWidth: 0.35, radius: 0.36});
 
 // ---- limbs -----------------------------------------------------------------
 const v = (a: V3) => new Vector3(a[0], a[1], a[2]);
@@ -209,10 +217,10 @@ const armsOf = (pose: Pose) => {
 // ---- character -------------------------------------------------------------
 export type Variant = 'officer' | 'civilian';
 
-const Star: React.FC<{position: V3; rotation?: V3; size: number}> = ({position, rotation, size}) => (
+const Star: React.FC<{position: V3; rotation?: V3; size: number; head?: boolean}> = ({position, rotation, size, head}) => (
 	<group position={position} rotation={rotation}>
-		<mesh geometry={starGeo} material={starMat} scale={[size, size, size * 0.3]} />
-		<mesh geometry={starGeo} material={inkMat} scale={[size * 1.32, size * 1.32, size * 0.2]} position={[0, 0, -size * 0.03]} />
+		<mesh geometry={starGeo} material={head ? starMatHead : starMat} scale={[size, size, size * 0.3]} />
+		<mesh geometry={starGeo} material={head ? inkMatHead : inkMat} scale={[size * 1.32, size * 1.32, size * 0.2]} position={[0, 0, -size * 0.03]} />
 	</group>
 );
 
@@ -285,27 +293,27 @@ export const Stickman: React.FC<{variant: Variant; pose: Pose; trail?: Pose[]}> 
 			</group>
 
 			<group position={headPos} quaternion={headQ}>
-				<Ink geometry={headGeo} material={headMat} line={charLine} />
+				<Ink geometry={headGeo} material={headMat} line={headLine} />
 				{variant === 'officer' ? (
 					<group position={[0, 0.2, -0.01]} rotation={[-0.1, 0, 0.03]}>
-						<Ink geometry={crownGeo} material={hatMat} line={charLine} />
+						<Ink geometry={crownGeo} material={hatMat} line={headLine} />
 						<mesh geometry={bandGeo} material={bandMat} position={[0, 0.036, 0]} />
 						<Ink
 							geometry={unitSphere}
 							material={visorMat}
-							line={propLine}
+							line={headPropLine}
 							position={[0, 0.0, 0.2]}
 							rotation={[0.3, 0, 0]}
 							scale={[0.3, 0.028, 0.24]}
 						/>
-						<Star position={[0, 0.165, 0.338]} rotation={[-0.42, 0, 0]} size={0.062} />
+						<Star position={[0, 0.165, 0.338]} rotation={[-0.42, 0, 0]} size={0.062} head />
 					</group>
 				) : (
 					<group rotation={[-0.42, 0, 0.05]}>
-						<Ink geometry={hairGeo} material={hairMat} line={charLine} />
-						<Ink geometry={tuftGeo} material={hairMat} line={propLine} position={[0.05, 0.39, 0.13]} rotation={[0.55, 0, -0.35]} />
-						<Ink geometry={tuftGeo} material={hairMat} line={propLine} position={[-0.08, 0.4, 0.08]} rotation={[0.3, 0, 0.4]} />
-						<Ink geometry={tuftGeo} material={hairMat} line={propLine} position={[0.0, 0.41, -0.02]} rotation={[-0.15, 0, 0.02]} scale={0.9} />
+						<Ink geometry={hairGeo} material={hairMat} line={headLine} />
+						<Ink geometry={tuftGeo} material={hairMat} line={headPropLine} position={[0.05, 0.39, 0.13]} rotation={[0.55, 0, -0.35]} />
+						<Ink geometry={tuftGeo} material={hairMat} line={headPropLine} position={[-0.08, 0.4, 0.08]} rotation={[0.3, 0, 0.4]} />
+						<Ink geometry={tuftGeo} material={hairMat} line={headPropLine} position={[0.0, 0.41, -0.02]} rotation={[-0.15, 0, 0.02]} scale={0.9} />
 					</group>
 				)}
 			</group>
