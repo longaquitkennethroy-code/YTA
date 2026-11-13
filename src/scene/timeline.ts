@@ -27,13 +27,15 @@ export const WORDS: Word[] = [
 	{text: 'was.', from: 364, to: 386, who: 'officer'},
 ];
 
-/** 0..1 mouth-open amount for a speaker: one pulse per word, two for long words. */
+/** 0..1 mouth-open amount for a speaker. */
 export const talk = (frame: number, who: Word['who']) => {
 	for (const w of WORDS) {
 		if (w.who === who && frame >= w.from && frame < w.to) {
-			const p = (frame - w.from) / (w.to - w.from);
-			const syllables = w.text.length > 6 ? 3 : w.text.length > 4 ? 2 : 1;
-			return 0.25 + 0.75 * Math.abs(Math.sin(p * Math.PI * syllables));
+			// Mouth shapes are swapped and held for three frames, not blended:
+			// that is how the lip-sync in the reference reads.
+			const shapes = [1, 0.2, 0.6, 0.9, 0.05, 0.75, 0.35];
+			const step = Math.floor(frame / 3);
+			return shapes[(step * 5 + w.from) % shapes.length];
 		}
 	}
 	return 0;

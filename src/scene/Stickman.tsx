@@ -144,12 +144,13 @@ const makeBodyMat = (variant: Variant) =>
 		rim: 0.85,
 		rimWidth: 0.3,
 		ground: 0.3,
+		edge: 0.8,
 		yRange: [0, BODY_H * 0.7],
 		pivot: [0, BODY_H / 2, 0],
 		radius: BODY_H / 2,
 		pattern: variant === 'officer' ? 'uniform' : 'none',
 	});
-const hatMat = toon({ramp: P.uniform, ...CHAR, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
+const hatMat = toon({ramp: P.uniform, ...CHAR, edge: 0.5, rim: 0.8, rimWidth: 0.35, pivot: [0, 0.15, 0], radius: 0.36});
 const hairMat = toon({ramp: P.hair, ...CHAR, rim: 0.6, rimWidth: 0.35, radius: 0.36});
 
 // ---- limbs -----------------------------------------------------------------

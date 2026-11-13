@@ -48,6 +48,8 @@ export type ToonOptions = {
 	/** Rim highlight on the light side. */
 	rim?: number;
 	rimWidth?: number;
+	/** Darken toward the silhouette, like the glossy bodies in the reference. */
+	edge?: number;
 	/** Extra darkening toward the bottom of the object (object-space y range). */
 	ground?: number;
 	yRange?: [number, number];
@@ -119,6 +121,7 @@ uniform float uSoft;
 uniform float uDeepAmt;
 uniform float uRim;
 uniform float uRimWidth;
+uniform float uEdge;
 uniform float uGround;
 uniform vec2 uYRange;
 uniform float uPatScale;
@@ -299,6 +302,7 @@ void main() {
 
 	// crisp rim highlight hugging the lit edge
 	float fres = 1.0 - max(dot(Nr, V), 0.0);
+	col = mix(col, cDeep, pow(fres, 2.4) * uEdge);
 	float side = dot(normalize(Nr.xy + vec2(1e-5)), normalize(L.xy + vec2(1e-5)));
 	float rimT = 1.0 - uRimWidth;
 	float rim = smoothstep(rimT, rimT + 0.035, fres * smoothstep(0.1, 0.85, side));
@@ -358,6 +362,7 @@ export const toon = (o: ToonOptions): ShaderMaterial => {
 			uDeepAmt: {value: o.deep ?? 0.6},
 			uRim: {value: o.rim ?? 0},
 			uRimWidth: {value: o.rimWidth ?? 0.3},
+			uEdge: {value: o.edge ?? 0},
 			uGround: {value: o.ground ?? 0},
 			uYRange: {value: new Vector2(...(o.yRange ?? [0, 1]))},
 			uPivot: {value: new Vector3(...(o.pivot ?? [0, 0, 0]))},

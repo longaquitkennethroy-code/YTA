@@ -7,8 +7,13 @@ type V3 = [number, number, number];
 const io = Easing.inOut(Easing.cubic);
 const CLAMP = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
 /** Eased keyframe track. */
-const key = (f: number, frames: number[], values: number[]) =>
+const smooth = (f: number, frames: number[], values: number[]) =>
 	interpolate(f, frames, values, {...CLAMP, easing: io});
+// Poses snap: most of the move happens in the first few frames, with a small
+// overshoot before settling.
+const snap = Easing.bezier(0.2, 1.4, 0.35, 1);
+const key = (f: number, frames: number[], values: number[]) =>
+	interpolate(f, frames, values, {...CLAMP, easing: snap});
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const lerp3 = (a: V3, b: V3, t: number): V3 => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const wave = (f: number, period: number, phase = 0) => Math.sin((f / period) * Math.PI * 2 + phase);
@@ -76,7 +81,7 @@ export const officerPose = (f: number): Pose => {
 			look: [key(f, [0, 26, 84], [0.5, -0.6, 0]) * (1 - turnBody) + aside * 0.9 - (f >= SHOT_C ? 0.5 * (1 - aside) : 0), 0],
 			browL: [0.06 + speaking * 0.015 + lean * 0.05, -0.12],
 			browR: [-0.02 - lean * 0.03, 0.2 + lean * 0.2],
-			mouth: [0.105, speaking * 0.045, -0.05 - lean * 0.06, 0],
+			mouth: [0.105 - speaking * 0.045, speaking * 0.05, -0.05 - lean * 0.06, 0],
 		},
 	};
 };
@@ -84,8 +89,8 @@ export const officerPose = (f: number): Pose => {
 // ---- civilian --------------------------------------------------------------
 export const civilianPose = (f: number): Pose => {
 	const sway = wave(f, 64);
-	const walkP = key(f, [SHOT_C + 2, SHOT_C + 62], [0, 1]);
-	const walking = key(f, [SHOT_C + 2, SHOT_C + 8, SHOT_C + 54, SHOT_C + 62], [0, 1, 1, 0]);
+	const walkP = smooth(f, [SHOT_C + 2, SHOT_C + 62], [0, 1]);
+	const walking = smooth(f, [SHOT_C + 2, SHOT_C + 8, SHOT_C + 54, SHOT_C + 62], [0, 1, 1, 0]);
 	const theta = walkP * Math.PI * 2 * 3.5;
 	const arrived = key(f, [SHOT_C + 56, SHOT_C + 70], [0, 1]);
 
@@ -127,7 +132,7 @@ export const civilianPose = (f: number): Pose => {
 			look: [(f >= SHOT_C ? 0.6 : 0) * (1 - nervous) - nervous * 0.8 + caught * 0.3, sip * 0.6],
 			browL: [0.03 + caught * 0.07 + shrug * 0.05 + nervous * 0.04, -0.1 - shrug * 0.25],
 			browR: [0.03 + caught * 0.07 + shrug * 0.05, -0.1 - shrug * 0.25 - nervous * 0.15],
-			mouth: [0.075 + nervous * 0.05, speaking * 0.04 + caught * 0.025, 0.02 + nervous * 0.1 - shrug * 0.04, 0],
+			mouth: [0.075 + nervous * 0.05 - speaking * 0.03, speaking * 0.045 + caught * 0.025, 0.02 + nervous * 0.1 - shrug * 0.04, 0],
 		},
 	};
 };
@@ -135,18 +140,29 @@ export const civilianPose = (f: number): Pose => {
 // ---- camera ----------------------------------------------------------------
 export type Shot = {pos: V3; target: V3; fov: number; roll: number};
 
-export const cameraAt = (f: number): Shot => {
+const shotAt = (f: number): Shot => {
 	if (f < SHOT_B) {
 		// low and close on the officer; slow push-in with a sideways drift
-		const t = key(f, [0, SHOT_B], [0, 1]);
+		const t = smooth(f, [0, SHOT_B], [0, 1]);
 		return {pos: lerp3([1.3, 0.8, 3.15], [1.1, 0.88, 2.9], t), target: [0.58, 1.5, 0.6], fov: 64, roll: lerp(-0.07, -0.03, t)};
 	}
 	if (f < SHOT_C) {
 		// reverse angle from the kitchen, over the civilian's shoulder
-		const t = key(f, [SHOT_B, SHOT_C], [0, 1]);
+		const t = smooth(f, [SHOT_B, SHOT_C], [0, 1]);
 		return {pos: lerp3([-1.4, 1.62, -5.95], [-1.6, 1.66, -5.8], t), target: [0.7, 1.2, 0.6], fov: 50, roll: 0.06};
 	}
 	// side-on two-shot, arcing round as they meet
-	const t = key(f, [SHOT_C, 390], [0, 1]);
+	const t = smooth(f, [SHOT_C, 390], [0, 1]);
 	return {pos: lerp3([-2.5, 1.2, 2.7], [-1.8, 1.3, 3.4], t), target: [0.55, 1.25, 0.0], fov: 56, roll: lerp(-0.06, -0.02, t)};
+};
+
+/** The camera never sits still: a slow handheld drift on top of every shot. */
+export const cameraAt = (f: number): Shot => {
+	const s = shotAt(f);
+	const d = (p: number, ph: number) => Math.sin((f / p) * Math.PI * 2 + ph);
+	return {
+		...s,
+		pos: [s.pos[0] + d(97, 0) * 0.02, s.pos[1] + d(71, 1.3) * 0.014, s.pos[2] + d(113, 2.1) * 0.02],
+		roll: s.roll + d(131, 0.7) * 0.006,
+	};
 };
